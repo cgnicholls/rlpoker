@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import cfr_game
+import numpy as np
 
 # LeducHoldEm is the following game.
 # The deck consists of (J, J, Q, Q, K, K).
@@ -33,7 +34,7 @@ class LeducCFR(CFRGame):
 	# The next step is to sample the cards for the two players.
 
 	# The deck is J, J, Q, Q, K, K. We represent J = 11, Q = 12, K = 13.
-	deck = [11,12,13]
+	deck = [11,11,12,12,13,13]
 	max_raises_per_round = 2
 	num_rounds = 2
 
@@ -42,7 +43,7 @@ class LeducCFR(CFRGame):
 	# If the bet sequence isn't in this dictionary, it is invalid.
 	# If we want to have a larger raise maximum, we should just make a tree to parse the
 	# bet sequence, but this will do for now.
-	available_actions = {
+	available_actions_dict = {
 		(): [1,2],
 		(1): [1,2],
 		(1, 1): [],
@@ -66,8 +67,8 @@ class LeducCFR(CFRGame):
 	def __init__(self):
 		pass
 
-	@static
-	def interpret_action_sequence(action_sequence):
+	@staticmethod
+	def interpret_history(history):
 		""" Validate the action sequence -- check it makes sense. If it's invalid, return an empty dictionary.
 		Otherwise, returns a dictionary with: player to play, current pot, is it terminal, the information set.
 		"""
@@ -103,10 +104,9 @@ class LeducCFR(CFRGame):
 					bet_sequence = []
 
 		# Now interpret the bet sequences. There are either 0, 1 or 2 in a valid sequence
-		round = len(bet_sequences)
-		return {''}
+		return cards, bet_sequences
 
-	@static
+	@staticmethod
 	def compute_bets(bet_sequences):
 		""" Given 0, 1 or 2 bet sequences, compute the current bets by players 1 and 2.
 		"""
@@ -138,50 +138,108 @@ class LeducCFR(CFRGame):
 				player = other_player[player]
 		return bets
 
-	@static
+	@staticmethod
 	def available_actions(bet_sequence):
 		""" Given a single bet sequence (for one round), returns the available actions.
 		"""
-		assert bet_sequence in LeducCFR.available_actions
-		return LeducCFR.available_actions[bet_sequence]
+		assert bet_sequence in LeducCFR.available_actions_dict
+		return LeducCFR.available_actions_dict[bet_sequence]
 
-	@static
-	def payoffs(action_sequence):
+	@staticmethod
+	def payoffs(history):
 		""" If the action sequence is terminal, returns the payoffs for players
 		1 and 2 in a dictionary with keys 1 and 2.
 		"""
-		assert LeducCFR.is_terminal(action_sequence)
+		assert LeducCFR.is_terminal(history)
 
-		bet_sequences = LeducCFR.interpret_action_sequence()
+		cards, bet_sequences = LeducCFR.interpret_history(history)
+		hole_cards = {1: cards[0], 2: cards[1]}
+
+		flop = cards[2]
 		bets = LeducCFR.compute_bets(bet_sequences)
 
-		# If the action sequence
+		# We have reached a terminal node, so we have to decide who won and give them the whole pot.
+		pot = bets[1] + bets[2]
 
-	@static
-	def is_terminal(bet_sequences):
+		# If 1 and 2 have the same hole cards, it's a draw, so split the pot
+		if hole_cards[1] == hole_cards[2]:
+			return {1: pot / 2, 2: pot / 2}
+
+		# If the last action in the game was a fold, then that player loses and the other wins
+		last_action = bet_sequences[1][-1]
+		# The first player in round 2 is 2. Hence the last player is 2 if there are an even number of moves
+		# and otherwise 1.
+		last_player = 2 if len(bet_sequences[1]) % 2 == 0 else 1
+		if bet_sequences[1][-1] == 0:
+			winner = other_player[last_player]
+		else
+			# Otherwise the last action was a call, so it goes to a showdown.
+			if hole_cards[1] == flop:
+				winner = 1
+			else if hole_cards[2] == flop:
+				winner = 2
+			else:
+				# There is no pair, so the winner is the one with highest card. We already checked the
+				# hole cards aren't equal.
+				winner = 1 if hole_cards[1] > hole_cards[2] else 2
+
+		return {winner: pot, other_player[winner]: 0}
+
+	@staticmethod
+	def is_terminal(history):
+		""" Return whether the history is terminal
+		"""
+		_, bet_sequences = LeducCFR.interpret_history(history)
+		return LeducCFR.is_terminal_bet_sequences(bet_sequences)
+
+	@staticmethod
+	def is_terminal_bet_sequences(bet_sequences):
 		""" Returns True/False if the bet_sequences is terminal or not.
 		"""
 		# We just check that there are no available actions to a player in the
 		# last bet sequence, and that there are two bet sequences
 		if len(bet_sequences) < 2:
 			return False
-		return len(LeducCFR.available_actions[bet_sequences[-1]]) == 0
+		return len(LeducCFR.available_actions_dict[bet_sequences[-1]]) == 0
 
-	def which_player(self, action_sequence):
+	@staticmethod
+	def which_player(history):
 		""" Returns the player who is to play following the action sequence.
 		"""
-		pass
+		cards, bet_sequences = LeducCFR.interpret_history(history)
 
-	def sample_chance_action(self, action_sequence):
+		
+
+	@staticmethod
+	def sample_chance_action(history):
 		""" If the player for the game state corresponding to the action
 		sequence is the chance player, then sample one of the available actions.
+		Return the action.
 		"""
-		pass
+		cards, bet_sequences = LeducCFR.interpret_history(history)
 
-	def information_set(self, action_sequence):
+		# Assert that it is the chance player to play.
+		assert LeducCFR.which_player(history) == 0
+
+		# Copy the Leduc deck and remove cards that have already been drawn.
+		deck = LeducCFR.deck[:]
+		for card in cards:
+			deck.remove(card)
+
+		# Just sample a card from the deck.
+		return np.random.choice(deck)
+
+	@staticmethod
+	def information_set(history):
 		""" Returns a unique hashable identifier for the information set
 		containing the action sequence. This could be a tuple with the
 		actions that are visible to the player. The information set belongs
 		to the player who is to play following the action sequence.
 		"""
-		pass
+		player = LeducCFR.which_player(history)
+
+		assert player in [1,2]
+		if player == 1:
+			return tuple(history[0] + history[2:])
+		else:
+			return tuple(history[1] + history[2:])

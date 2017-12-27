@@ -12,29 +12,34 @@ class CFRGame:
 	def __init__(self):
 		pass
 
-	def payoffs(self, action_sequence):
+	@staticmethod
+	def payoffs(action_sequence):
 		""" If the action sequence is terminal, returns the payoffs for players
 		1 and 2 in a dictionary with keys 1 and 2.
 		"""
 		pass
-
-	def is_terminal(self, action_sequence):
+	@staticmethod
+	def is_terminal(action_sequence):
 		""" Returns True/False if the action sequence is terminal or not.
 		"""
 		pass
 
-	def which_player(self, action_sequence):
+	@staticmethod
+	def which_player(action_sequence):
 		""" Returns the player who is to play following the action sequence.
 		"""
 		pass
 
-	def sample_chance_action(self, action_sequence):
+	@staticmethod
+	def sample_chance_action(history):
 		""" If the player for the game state corresponding to the action
 		sequence is the chance player, then sample one of the available actions.
+		Return the action.
 		"""
 		pass
 
-	def information_set(self, action_sequence):
+	@staticmethod
+	def information_set(history):
 		""" Returns a unique hashable identifier for the information set
 		containing the action sequence. This could be a tuple with the
 		actions that are visible to the player. The information set belongs
