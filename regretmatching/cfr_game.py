@@ -13,20 +13,26 @@ class CFRGame:
 		pass
 
 	@staticmethod
-	def payoffs(action_sequence):
+	def payoffs(history):
 		""" If the action sequence is terminal, returns the payoffs for players
 		1 and 2 in a dictionary with keys 1 and 2.
 		"""
 		pass
 	@staticmethod
-	def is_terminal(action_sequence):
+	def is_terminal(history):
 		""" Returns True/False if the action sequence is terminal or not.
 		"""
 		pass
 
 	@staticmethod
-	def which_player(action_sequence):
+	def which_player(history):
 		""" Returns the player who is to play following the action sequence.
+		"""
+		pass
+
+	@staticmethod
+	def available_actions(history):
+		""" Returns the actions available to the player to play.
 		"""
 		pass
 
