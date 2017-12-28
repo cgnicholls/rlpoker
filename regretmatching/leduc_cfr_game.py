@@ -65,7 +65,7 @@ class LeducCFR(CFRGame):
 	# We represent actions as: fold = 0, call/check = 1, bet/raise = 2.
 
 	def __init__(self):
-		self.
+		self.reset()
 
 	@staticmethod
 	def interpret_history(history):
@@ -315,7 +315,47 @@ class LeducCFR(CFRGame):
 		""" Resets the game, and returns the information set and player to play.
 		Chance actions are automatically taken.
 		"""
+		self.history = []
+		while LeducCFR.which_player(self.history) == 0:
+			self.history.append(LeducCFR.sample_chance_action(self.history))
 
+		if LeducCFR.is_terminal(self.history):
+			terminal = True
+			payoffs = LeducCFR.payoffs(self.history)
+			player = None
+			information_set = None
+		else:
+			terminal = False
+			payoffs = None
+			player = LeducCFR.which_player(self.history)
+			information_set = LeducCFR.information_set(self.history)
+
+		return player, information_set, terminal, payoffs
 
 	def play_action(self, action):
-		""" Given a history
+		""" Play the action in the game. Also plays any chance actions.
+		Returns the player to play and the information set they are in.
+		If action is None, then play uniformly at random among available actions.
+		"""
+		if action is None:
+			available_actions = LeducCFR.available_actions(self.history)
+			action = np.random.choice(available_actions)
+		assert action in LeducCFR.available_actions(self.history)
+		self.history.append(action)
+
+		if LeducCFR.is_terminal(self.history):
+			terminal = True
+			payoffs = LeducCFR.payoffs(self.history)
+			player = None
+			information_set = None
+		else:
+			# Play any chance actions
+			while LeducCFR.which_player(self.history) == 0:
+				self.history.append(LeducCFR.sample_chance_action(self.history))
+				
+			terminal = False
+			payoffs = None
+			player = LeducCFR.which_player(self.history)
+			information_set = LeducCFR.information_set(self.history)
+
+		return player, information_set, terminal, payoffs
