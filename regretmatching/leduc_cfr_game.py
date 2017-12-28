@@ -183,7 +183,6 @@ class LeducCFR(CFRGame):
 		cards, bet_sequences = LeducCFR.interpret_history(history)
 		hole_cards = {1: cards[0], 2: cards[1]}
 
-		flop = cards[2]
 		bets = LeducCFR.compute_bets(bet_sequences)
 
 		# We have reached a terminal node, so we have to decide who won and give them the whole pot.
@@ -195,14 +194,20 @@ class LeducCFR(CFRGame):
 			return {1: 0, 2: 0}
 
 		# If the last action in the game was a fold, then that player loses and the other wins
-		last_action = bet_sequences[1][-1]
 		# The first player in round 2 is 2. Hence the last player is 2 if there are an even number of moves
 		# and otherwise 1.
-		last_player = 2 if len(bet_sequences[1]) % 2 == 0 else 1
-		if bet_sequences[1][-1] == 0:
+
+		if bet_sequences[0][-1] == 0:
+			# If the last action in bet_sequences[0] is a fold, the game is over and the other player wins.
+			last_player = 1 if len(bet_sequences[0]) % 2 == 0 else 2
+			winner = other_player[last_player]
+		elif bet_sequences[1][-1] == 0:
+			# If the last action in bet_sequences[1] is a fold, then the game is over and the other player wins.
+			last_player = 2 if len(bet_sequences[1]) % 2 == 0 else 1
 			winner = other_player[last_player]
 		else:
 			# Otherwise the last action was a call, so it goes to a showdown.
+			flop = cards[2]
 			if hole_cards[1] == flop:
 				winner = 1
 			elif hole_cards[2] == flop:
@@ -226,9 +231,20 @@ class LeducCFR(CFRGame):
 		""" Returns True/False if the bet_sequences is terminal or not.
 		"""
 		# We just check that there are no available actions to a player in the
-		# last bet sequence, and that there are two bet sequences
-		if len(bet_sequences) < 2:
+		# last bet sequence.
+		# A terminal bet sequences occurs if any player folded, or if we are in the second
+		# bet sequence and there are no available actions.
+		assert len(bet_sequences) <= 2
+		if len(bet_sequences) == 0:
 			return False
+		elif len(bet_sequences) == 1:
+			# If there is one bet sequence, then it is terminal if and only if the last
+			# action was to fold.
+			if bet_sequences[0][-1] == 0:
+				return True
+			else:
+				# If the last action wasn't to fold, then we continue to the next round.
+				return False
 		bet_sequence_tuple = tuple(bet_sequences[-1])
 		return len(LeducCFR.available_actions_dict[bet_sequence_tuple]) == 0
 

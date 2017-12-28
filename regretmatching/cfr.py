@@ -32,6 +32,13 @@ def cfr(game, num_iters=10000):
 			if not average_strategy_snapshot is None:
 				snapshot_distance = compare_strategies(average_strategy, average_strategy_snapshot)
 				print("Distance between strategies (t - 100): {}".format(snapshot_distance))
+
+				# If the snapshot distance is small enough, then return the average strategy.
+				# This means that Euclidean distance between the strategy at time t and at time t - 100
+				# is small, which is hopefully sufficient for convergence.
+				if snapshot_distance < 1e-3:
+					return average_strategy
+
 			average_strategy_snapshot = average_strategy.copy()
 		average_strategy = compute_average_strategy(action_counts)
 		
