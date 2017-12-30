@@ -22,8 +22,9 @@ def play_against(game, user_player, strategy):
 			print("Player {} to play".format(player))
 			print("Information set: {}".format(information_set))
 			print("Please enter action (0 = fold, 1 = call, 2 = raise):")
-			action = int(input())
-			#action = 1
+			#action = int(input())
+			# Play randomly.
+			action = 1
 		else:
 			# Sometimes the information set doesn't exist in the strategy (since we're chance sampling)
 			if not information_set in strategy:
@@ -38,6 +39,13 @@ def play_against(game, user_player, strategy):
 				action = np.random.choice([0,1,2], p=prob_dist)
 		player, information_set, terminal, payoffs = game.play_action(action)
 	return payoffs
+
+def play_against_both(game, strategy):
+	""" Runs play_against with the user player in both positions.
+	"""
+	payoffs1 = play_against(game, 1, strategy)
+	payoffs2 = play_against(game, 2, strategy)
+	return {1: payoffs1[1]*.5 + payoffs2[2]*.5, 2: payoffs1[2]*.5 + payoffs2[1]*.5}
 
 if __name__ == "__main__":
 
@@ -68,7 +76,7 @@ if __name__ == "__main__":
 			game = LeducCFR()
 			all_payoffs = {1: [], 2: []}
 			while True:
-				payoffs = play_against(game, 2, average_strategy)
+				payoffs = play_against_both(game, average_strategy)
 				all_payoffs[1].append(payoffs[1])
 				all_payoffs[2].append(payoffs[2])
 				print("Payoffs: {}".format(payoffs))

@@ -36,7 +36,7 @@ def cfr(game, num_iters=10000):
 				# If the snapshot distance is small enough, then return the average strategy.
 				# This means that Euclidean distance between the strategy at time t and at time t - 100
 				# is small, which is hopefully sufficient for convergence.
-				if snapshot_distance < 1e-3:
+				if snapshot_distance < 1e-5:
 					return average_strategy
 
 			average_strategy_snapshot = average_strategy.copy()
@@ -88,23 +88,27 @@ def cfr_recursive(game, history, i, t, pi_1, pi_2, regrets, action_counts, strat
 		a = game.sample_chance_action(history)
 		return cfr_recursive(game, history + [a], i, t, pi_1, pi_2, regrets, action_counts, strategy_t, strategy_t_1)
 
+	# Get the information set
 	information_set = game.information_set(history)
-	#print("Information set: {}".format(information_set))
+
+	# Initialise strategy_t[information_set] uniformly at random.
+	if not information_set in strategy_t:
+		strategy_t[information_set] = {a: 1.0/float(len(available_actions)) for a in available_actions}
+
+	# Get the player to play and initialise values
 	player = game.which_player(history)
 	value = 0
-	#print("player: {}".format(player))
 	available_actions = game.available_actions(history)
-	#print("Available actions: {}".format(available_actions))
 	values_Itoa = {a: 0 for a in available_actions}
+
+	# Compute the counterfactual value of this information set by computing the counterfactual
+	# value of the information sets where the player plays each available action and taking
+	# the expected value (by weighting by the strategy).
 	for a in available_actions:
-		#print("Action: {}".format(a))
-		# Have to ensure that strategy_t[information_set][a] is initialised
-		if not information_set in strategy_t:
-			strategy_t[information_set] = {ad: 1.0/float(len(available_actions)) for ad in available_actions}
 		if player == 1:
 			values_Itoa[a] = cfr_recursive(game, history + [a], i, t, strategy_t[information_set][a] * pi_1, pi_2, regrets, action_counts, strategy_t, strategy_t_1)
 		else:
-			values_Itoa[a] = cfr_recursive(game, history + [a], i, t, strategy_t[information_set][a] * pi_1, pi_2, regrets, action_counts, strategy_t, strategy_t_1)
+			values_Itoa[a] = cfr_recursive(game, history + [a], i, t, pi_1, strategy_t[information_set][a] * pi_2, regrets, action_counts, strategy_t, strategy_t_1)
 		value += strategy_t[information_set][a] * values_Itoa[a]
 
 	# Update regrets now that we have computed the counterfactual value of the information
