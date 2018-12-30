@@ -2,7 +2,7 @@ import argparse
 
 from rlpoker.cfr import cfr, save_strategy, load_strategy
 from games.leduc import Leduc
-from rlpoker.one_card_poker import OneCardPoker
+from games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
 
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
         use_chance_sampling=args.use_chance_sampling)
 
-    strategy_name = '{}.strategy'.format(game)
+    strategy_name = '{}.strategy'.format(args.game)
     print("Saving strategy at {}".format(strategy_name))
     save_strategy(strategy, strategy_name)
 
