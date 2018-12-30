@@ -1,5 +1,7 @@
 # coding: utf-8
 
+import abc
+
 import numpy as np
 
 
@@ -30,6 +32,10 @@ class ExtensiveGameNode:
 
 
 class ExtensiveGame:
+    """Create an ExtensiveGame by passing an ExtensiveGameNode to the
+    constructor. This should be the root of the game, and define the entire
+    game tree.
+    """
 
     def __init__(self, root):
         # set the root node.

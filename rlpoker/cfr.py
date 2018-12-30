@@ -2,6 +2,7 @@
 # This implements Counterfactual Regret Minimization in a general zero sum two
 # player game.
 
+import pickle
 import numpy as np
 
 from rlpoker import best_response
@@ -26,6 +27,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
     strategy_t_1 = dict()
 
     average_strategy = None
+    exploitabilities = []
 
     # Each information set is uniquely identified with an action tuple.
     values = {1: [], 2: []}
@@ -49,10 +51,11 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
             completed_strategy = game.complete_strategy_uniformly(average_strategy)
             exploitability = best_response.compute_exploitability(
                 game, completed_strategy)
+            exploitabilities.append((t, exploitability))
 
             print("t: {}, exploitability: {}".format(t, exploitability))
 
-    return average_strategy
+    return average_strategy, exploitabilities
 
 
 def compute_average_strategy(action_counts):
@@ -192,3 +195,30 @@ def evaluate_strategies(game, strategy, num_iters=500):
     approximate the expected value of player 1.
     """
     return game.expected_value(strategy, strategy, num_iters)
+
+
+def save_strategy(strategy, file_name):
+    """Saves the strategy in the given file. A strategy is just a
+    dictionary, so we save using json.
+
+    :param strategy:
+    :param file_name:
+    :return:
+    """
+    with open(file_name, 'wb') as f:
+        pickle.dump(strategy, f)
+
+
+def load_strategy(file_name):
+    """Loads the strategy from a file. This is just json loading.
+
+    Args:
+        file_name: str.
+
+    Returns:
+        dict: the strategy.
+    """
+    with open(file_name, 'rb') as f:
+        strategy = pickle.load(f)
+
+    return strategy
