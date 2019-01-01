@@ -1,5 +1,7 @@
 import argparse
 
+import bokeh.plotting as plt
+
 from rlpoker.cfr import cfr, save_strategy, load_strategy
 from games.leduc import Leduc
 from games.one_card_poker import OneCardPoker
@@ -18,6 +20,8 @@ if __name__ == "__main__":
     parser.add_argument('--num_cards', default=3, type=int,
                         help='In OneCardPoker or Leduc, pass the number of '
                              'cards to use.')
+    parser.add_argument('--num_suits', default=2, type=int,
+                        help='In Leduc, pass the number of suits to use.')
     parser.add_argument('--use_chance_sampling', action='store_true',
                         help='Pass this option to use chance sampling. By '
                              'default, we don\'t use chance sampling.')
@@ -26,7 +30,8 @@ if __name__ == "__main__":
     if args.game == 'Leduc':
         print("Solving Leduc Hold Em with {} iterations".format(
             args.num_iters))
-        game = Leduc.create_game(args.num_cards)
+        cards = args.num_suits * tuple(10 + i for i in range(args.num_cards))
+        game = Leduc(cards)
 
     elif args.game == 'OneCardPoker':
         print("Solving One Card Poker")
@@ -35,9 +40,24 @@ if __name__ == "__main__":
     strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
         use_chance_sampling=args.use_chance_sampling)
 
+    # Save the strategy and plot the performance.
+
     strategy_name = '{}.strategy'.format(args.game)
     print("Saving strategy at {}".format(strategy_name))
     save_strategy(strategy, strategy_name)
 
     exploitability = compute_exploitability(game, strategy)
     print("Exploitability of saved strategy: {}".format(exploitability))
+
+    plot_name = '{}.html'.format(args.game)
+    plt.output_file(plot_name)
+    p = plt.figure(title='Exploitability for CFR trained on {}'.format(
+        args.game), x_axis_label='t', y_axis_label='Exploitability')
+    times = [pair[0] for pair in exploitabilities]
+    exploits = [pair[1] for pair in exploitabilities]
+    p.line(times, exploits)
+
+    plt.show(p)
+
+    print("Saved plot of exploitability at: {}".format(plot_name))
+
