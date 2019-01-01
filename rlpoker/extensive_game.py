@@ -8,7 +8,7 @@ import numpy as np
 class ExtensiveGameNode:
     """ A class for a game node in an extensive form game.
     """
-    def __init__(self, player):
+    def __init__(self, player, action_list=(), hidden_from=set()):
         # Which player is to play in the node. Use -1 for terminal, 0 for
         # chance, 1 for player 1, 2 for player 2.
         self.player = player
@@ -18,8 +18,8 @@ class ExtensiveGameNode:
         # the action in this node.
         self.children = {}
 
-        # Who can see the actions in this node.
-        self.hidden_from = []
+        # A list of players from which the actions in this node are hidden.
+        self.hidden_from = hidden_from
 
         # Utility of the node to each player (as a dictionary). Only relevant
         # for terminal nodes.
@@ -29,6 +29,21 @@ class ExtensiveGameNode:
         # dictionary with keys the actions and probs the probability of choosing
         # this action.
         self.chance_probs = {}
+
+        # Store an action list.
+        self.action_list = action_list
+
+        # The node can also store extra information.
+        self.extra_info = {}
+
+    def __str__(self):
+        return "\n".join(["Player: {}".format(self.player),
+                         "Actions: {}".format(list(self.children.keys())),
+                         "Hidden from: {}".format(self.hidden_from),
+                         "Utility: {}".format(self.utility),
+                         "Chance probs: {}".format(self.chance_probs),
+                         "Action list: {}".format(self.action_list)])
+
 
 
 class ExtensiveGame:
@@ -54,13 +69,13 @@ class ExtensiveGame:
             print(action_list)
         for action, child in node.children.items():
             ExtensiveGame.print_tree_recursive(
-                child, action_list + [action], only_leaves)
+                child, action_list + (action,), only_leaves)
 
     def print_tree(self, only_leaves=False):
         """ Prints out a list of all nodes in the tree by the list of actions
         needed to get to each node from the root.
         """
-        ExtensiveGame.print_tree_recursive(self.root, [], only_leaves)
+        ExtensiveGame.print_tree_recursive(self.root, (), only_leaves)
 
     def build_information_sets(self, player):
         """ Returns a dictionary from nodes to a unique identifier for the
