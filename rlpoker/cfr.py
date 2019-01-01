@@ -35,8 +35,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
         for i in [1, 2]:
             cfr_recursive(game, game.root, i, t, 1.0, 1.0, 1.0, regrets,
                           action_counts, strategy_t, strategy_t_1,
-                          use_chance_sampling=use_chance_sampling
-                         )
+                          use_chance_sampling=use_chance_sampling)
 
         average_strategy = compute_average_strategy(action_counts)
 
@@ -98,16 +97,14 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets, action_counts,
             return cfr_recursive(
                 game, node.children[a], i, t, pi_c, pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
-                use_chance_sampling=use_chance_sampling
-            )
+                use_chance_sampling=use_chance_sampling)
         else:
             value = 0
             for a, cp in node.chance_probs.items():
                 value += cp * cfr_recursive(
                     game, node.children[a], i, t, cp * pi_c, pi_1, pi_2,
                     regrets, action_counts, strategy_t, strategy_t_1,
-                    use_chance_sampling=use_chance_sampling
-                )
+                    use_chance_sampling=use_chance_sampling)
             return value
 
     # Get the information set
@@ -133,15 +130,13 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets, action_counts,
                 game, node.children[a], i, t, pi_c,
                 strategy_t[information_set][a] * pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
-                use_chance_sampling=use_chance_sampling
-            )
+                use_chance_sampling=use_chance_sampling)
         else:
             values_Itoa[a] = cfr_recursive(
                 game, node.children[a], i, t, pi_c,
                 pi_1, strategy_t[information_set][a] * pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
-                use_chance_sampling=use_chance_sampling
-            )
+                use_chance_sampling=use_chance_sampling)
         value += strategy_t[information_set][a] * values_Itoa[a]
 
     # Update regrets now that we have computed the counterfactual value of the
