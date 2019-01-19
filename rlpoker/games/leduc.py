@@ -238,3 +238,16 @@ class Leduc(ExtensiveGame):
             return {1: -pot[1], 2: pot[1]}
         else:
             return {1: 0, 2: 0}
+    #
+    # def compute_state_vectors(self):
+    #     """Computes a state vector for each information set id.
+    #
+    #     Returns:
+    #         dict. Dictionary with keys the information set ids and values
+    #             the vector representation as a numpy array.
+    #     """
+    #
+    #     # Generate a vector for each information set.
+    #     for info_set_id in self.info_set_ids.values():
+    #
+

@@ -3,8 +3,11 @@ from collections import deque
 import random
 import numpy as np
 
+from rlpoker.best_response import compute_exploitability
+
 class Agent:
-    def __init__(self, name, input_dim, max_replay=100000, max_supervised=100000, best_response_lr=1e-2, supervised_lr=1e-3):
+    def __init__(self, name, input_dim, action_dim, max_replay=100000,
+                 max_supervised=100000, best_response_lr=1e-2, supervised_lr=1e-3):
         self.replay_memory = deque(maxlen=max_replay)
         self.supervised_memory = deque(maxlen=max_supervised)
 
@@ -24,10 +27,11 @@ class Agent:
             self.update_ops.append(target_vars[i].assign(current_vars[i]))
 
         # Set up Q-learning loss functions
-        self.predicted_next_q = tf.placeholder('float32', shape=[None, 3])
+        self.predicted_next_q = tf.placeholder('float32', shape=[None,
+                                                                 action_dim])
         self.reward = tf.placeholder('float32', shape=[None])
         self.action = tf.placeholder('int32', shape=[None])
-        one_hot_action = tf.one_hot(self.action, 3)
+        one_hot_action = tf.one_hot(self.action, action_dim)
 
         with tf.variable_scope('current_q' + name):
             q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
@@ -102,7 +106,8 @@ class Agent:
         return policy_loss
 
     # Create a 2 layer neural network with relu activations on the hidden layer. The output is the predicted q-value of an action.
-    def create_q_network(self, scope, input_dim, num_hidden=2, hidden_dim=20, l2_reg=1e-3):
+    def create_q_network(self, scope, input_dim, action_dim, num_hidden=2,
+                         hidden_dim=20, l2_reg=1e-3):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder('float32', shape=[None, input_dim])
 
@@ -114,13 +119,15 @@ class Agent:
                 biases_initializer=tf.zeros_initializer(),
                 weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
 
-            output_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=3,
+            output_layer = tf.contrib.layers.fully_connected(hidden_layer,
+                                                             num_outputs=action_dim,
             weights_initializer=tf.contrib.layers.xavier_initializer(),
             biases_initializer=tf.zeros_initializer(),
             weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
         return {'input': input_layer, 'output': output_layer}
 
-    def create_policy_network(self, scope, input_dim, num_hidden=2, hidden_dim=10, l2_reg=1e-3):
+    def create_policy_network(self, scope, input_dim, action_dim,
+                              num_hidden=2, hidden_dim=10, l2_reg=1e-3):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder('float32', shape=[None, input_dim])
 
@@ -131,8 +138,40 @@ class Agent:
                 biases_initializer=tf.zeros_initializer(),
                 weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
 
-            output_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=3,
+            output_layer = tf.contrib.layers.fully_connected(hidden_layer,
+                                                             num_outputs=action_dim,
             activation_fn=tf.nn.softmax, weights_initializer=tf.contrib.layers.xavier_initializer(),
             biases_initializer=tf.zeros_initializer(),
             weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
         return {'input': input_layer, 'output': output_layer}
+
+    def get_strategy(self, sess, states):
+        """Returns a strategy for an agent. This is a mapping from
+        information sets in the game to probability distributions over
+        actions.
+
+        Args:
+            sess: tensorflow session.
+            states: dict. This is a dictionary with keys the information set
+                ids and values the vectors to input to the network.
+        """
+        strategy = dict()
+        for info_set_id, state in states.items():
+            policy = self.predict_policy(sess, state)
+            strategy[info_set_id] = {i: policy[i] for i in range(len(policy))}
+
+        return strategy
+
+    def compute_exploitability(self, sess, game):
+        """Computes the exploitability of the agent's current strategy.
+
+        Args:
+            game: ExtensiveGame.
+
+        Returns:
+            float. Exploitability of the agent's strategy.
+        """
+        states = game.get_state_vectors()
+        strategy = self.get_strategy(sess, states)
+
+        return compute_exploitability(game, strategy)

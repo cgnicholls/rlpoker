@@ -10,7 +10,7 @@ def br(game, info_set, reach_probs, strategy, br_strategy, i):
       probability of reaching this node if we ignore player i's strategy. This
       is often denoted pi_{-i}^strategy(node).
     - strategy is a dictionary from nodes in the game tree (for player -i) to
-      probabilies over actions (including chance).
+      probabilities over actions (including chance).
     - br_strategy is the best response strategy we return.
     - game is an ExtensiveGame object, defining a game by a game tree.
     - i is the player for whom we want to compute the best response (against -i's
