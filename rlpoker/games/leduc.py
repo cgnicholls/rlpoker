@@ -4,20 +4,30 @@
 from collections import deque, Counter
 
 from rlpoker.extensive_game import ExtensiveGame, ExtensiveGameNode
+from rlpoker.games.card import Card
 
 
 class Leduc(ExtensiveGame):
-    """
+    """Leduc is a game of poker with 2 rounds. Both players initially ante 1
+    chip. The raise amount in round 1 is 2 and the raise amount in round 2
+    is 4. When facing a bet/raise, a player can:
+    - call, matching the amount their opponent bet;
+    - raise, betting the raise amount;
+    - or fold, ending the hand.
+    When facing a check, the player can either
+    - check, ending the round;
+    - or raise, betting the raise amount.
+    On the first move in a round, the player can check or bet.
     """
     def __init__(self, cards, max_raises=4, raise_amount=2):
         root = Leduc.create_tree(cards, max_raises=max_raises,
                                  raise_amount=raise_amount)
 
         # Initialise the super class.
-        super(Leduc, self).__init__(root)
+        super().__init__(root)
 
     @staticmethod
-    def create_tree(cards, max_raises=4, raise_amount=2):
+    def create_tree(cards, max_raises, raise_amount):
         # Create the root node.
         root = ExtensiveGameNode(0, action_list=(), hidden_from={2})
 
@@ -82,7 +92,7 @@ class Leduc(ExtensiveGame):
                 # The betting actions are all the actions since the last
                 # card was dealt on the board.
                 last_card_index = max([i for i, a in enumerate(
-                    action_list) if a >= 10])
+                    action_list) if type(a) is Card])
                 betting_actions = action_list[last_card_index+1:]
                 # First determine the available actions. If we are still in
                 # the betting round then the previous player didn't fold.
@@ -204,7 +214,7 @@ class Leduc(ExtensiveGame):
                 current_node.utility = {1: pot[2], 2: -pot[2]}
             elif state == 'showdown':
                 # We have to work out who won the pot.
-                cards = tuple(a for a in action_list if a >= 10)
+                cards = tuple(a for a in action_list if type(a) is Card)
                 assert len(cards) == 3
                 hole1, hole2, board = cards
                 current_node.utility = Leduc.compute_showdown(
@@ -217,6 +227,26 @@ class Leduc(ExtensiveGame):
 
     @staticmethod
     def compute_showdown(hole1, hole2, board, pot):
+        """Compute showdown returns the reward dictionary. The reward
+        dictionary has keys 1 and 2 and values the reward that player 1 and
+        player 2 respectively receive from the hand.
+
+        Args:
+            hole1: Card.
+            hole2: Card.
+            board: Card.
+            pot: dict. Keys are 1 and 2 and values are the amounts that each of
+            1 and 2 have bet into the pot.
+
+        Returns:
+            dict. Dictionary with the reward for player 1 and reward for
+            player 2.
+        """
+        # First convert each card into just its value.
+        hole1 = hole1.value
+        hole2 = hole2.value
+        board = board.value
+
         # We evaluate as: pair beats high card.
         pair1 = hole1 == board
         pair2 = hole2 == board
@@ -238,16 +268,3 @@ class Leduc(ExtensiveGame):
             return {1: -pot[1], 2: pot[1]}
         else:
             return {1: 0, 2: 0}
-    #
-    # def compute_state_vectors(self):
-    #     """Computes a state vector for each information set id.
-    #
-    #     Returns:
-    #         dict. Dictionary with keys the information set ids and values
-    #             the vector representation as a numpy array.
-    #     """
-    #
-    #     # Generate a vector for each information set.
-    #     for info_set_id in self.info_set_ids.values():
-    #
-
