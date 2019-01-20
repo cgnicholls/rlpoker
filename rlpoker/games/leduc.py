@@ -43,9 +43,12 @@ class Leduc(ExtensiveGame):
                                                    self.card_indices, self.max_raises)
 
         # Make sure the mappings are unique.
-
-        print(self.state_vectors)
         assert len(set(self.state_vectors.keys())) == len({tuple(v) for v in self.state_vectors.values()})
+
+        # Make sure all the vectors are the same length.
+        assert len(set(len(tuple(v)) for v in self.state_vectors.values())) == 1
+        self.state_dim = list(len(tuple(v)) for v in self.state_vectors.values())[0]
+        self.action_dim = 3
 
     @staticmethod
     def create_tree(cards, max_raises, raise_amount):
@@ -329,13 +332,28 @@ def compute_state_vectors(info_set_ids, card_indices, max_raises):
         if current_round == 1:
             num_raises1 = Counter(actions1)[2]
             round1_vec = one_hot_encoding(max_raises + 1, num_raises1)
-            round2_vec = np.zeros(max_raises + 1, dtype=float)
+            round1_vec = np.append(round1_vec, len(actions1) == 0)
+            first_is_call = 0
+            if len(actions1) > 0 and actions1[0] == 1:
+                first_is_call = 1
+            round1_vec = np.append(round1_vec, first_is_call)
+            round2_vec = np.zeros(max_raises + 3, dtype=float)
         else:
             num_raises1 = Counter(actions1)[2]
             num_raises2 = Counter(actions2)[2]
 
             round1_vec = one_hot_encoding(max_raises + 1, num_raises1)
+            round1_vec = np.append(round1_vec, len(actions1) == 0)
+            first_is_call = 0
+            if len(actions1) > 0 and actions1[0] == 1:
+                first_is_call = 1
+            round1_vec = np.append(round1_vec, first_is_call)
             round2_vec = one_hot_encoding(max_raises + 1, num_raises2)
+            round2_vec = np.append(round2_vec, len(actions2) == 0)
+            first_is_call = 0
+            if len(actions2) > 0 and actions2[0] == 1:
+                first_is_call = 1
+            round2_vec = np.append(round2_vec, first_is_call)
 
         state_vectors[info_set_id] = np.concatenate(
             [player_vec, hole_vec, board_vec, round1_vec, round2_vec], axis=0)

@@ -1,4 +1,6 @@
 
+from collections import Counter
+
 import numpy as np
 
 from rlpoker.games.leduc import Leduc, compute_state_vectors, compute_betting_rounds
@@ -122,13 +124,34 @@ def test_compute_state_vectors():
             np.array([1]),
             np.array([1, 0, 0]),
             np.array([0, 0, 0]),
-            np.array([0, 0, 1]),
-            np.array([0, 0, 0])], axis=0).astype(float)
+            np.array([0, 0, 1, 0, 1]),
+            np.array([0, 0, 0, 0, 0])], axis=0).astype(float)
     ]
     computed = compute_state_vectors(info_set_ids, card_indices, max_raises=2)
 
+    print(expected[0])
+    print(computed[info_set_ids[0]])
     assert np.all(expected[0] == computed[info_set_ids[0]])
 
 
-if __name__ == "__main__":
-    test_compute_state_vectors()
+def test_compute_state_vectors_unique():
+
+    cards = [Card(1, 2), Card(2, 2), Card(3, 3)]
+    game = Leduc(cards)
+
+    state_vectors = game.state_vectors
+
+    seen_vectors = {}
+
+    for info_set_id, v in state_vectors.items():
+        t = tuple(v)
+        if t in seen_vectors:
+            print("Clash1: {}, {}".format(seen_vectors[t], t))
+            print("Clash2: {}, {}".format(info_set_id, t))
+            print(info_set_id)
+
+            assert False
+
+        seen_vectors[t] = info_set_id
+
+    # assert len(set(game.state_vectors.keys())) == len({tuple(v) for v in game.state_vectors.values()})
