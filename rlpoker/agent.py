@@ -13,9 +13,9 @@ class Agent:
 
         self.name = name
 
-        self.q_network = self.create_q_network('current_q' + name, input_dim)
-        self.target_q_network = self.create_q_network('target_q' + name, input_dim)
-        self.policy_network = self.create_policy_network('policy' + name, input_dim)
+        self.q_network = self.create_q_network('current_q' + name, input_dim, action_dim)
+        self.target_q_network = self.create_q_network('target_q' + name, input_dim, action_dim)
+        self.policy_network = self.create_policy_network('policy' + name, input_dim, action_dim)
 
         # Create ops for copying current network to target network. We create a list
         # of the variables in both networks and then create an assign operation that

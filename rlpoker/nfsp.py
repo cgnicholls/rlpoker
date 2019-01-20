@@ -2,9 +2,10 @@
 
 import tensorflow as tf
 import numpy as np
-from games.leduc import Leduc
+from rlpoker.games.leduc import Leduc
+from rlpoker.games.card import Card, get_deck
 from rlpoker.best_response import compute_exploitability
-from agent import Agent
+from rlpoker.agent import Agent
 from time import time, gmtime, strftime
 import os
 
@@ -39,7 +40,7 @@ def create_summary_tensors():
 def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.0, epsilon_steps=100000, eta=0.1, max_train_steps=10000000, batch_size=128, steps_before_training=100000, q_learn_every=32, policy_learn_every=128, verbose=False, players_to_train=[1,2], clip_reward=True):
 
     # Create two agents
-    agents = {1: Agent('1', game.state_dim()), 2: Agent('2', game.state_dim())}
+    agents = {1: Agent('1', game.state_dim, game.action_dim), 2: Agent('2', game.state_dim, game.action_dim)}
 
     # Create summary tensors
     summary_tensor = create_summary_tensors()
@@ -48,7 +49,7 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.
     merged = tf.summary.merge_all()
 
     time_str = strftime("%d-%m-%Y-%H:%M:%S", gmtime())
-    save_path = os.path.join('experiments', game.name(), time_str)
+    save_path = os.path.join('experiments', time_str)
 
     if not os.path.exists(save_path):
         print("Path doesn't exist, so creating: {}".format(save_path))
@@ -204,4 +205,5 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.
     return agents
 
 if __name__ == '__main__':
-    nfsp(Leduc(), verbose=False, eta=0.2)
+    cards = get_deck(3, 2)
+    nfsp(Leduc(cards), verbose=False, eta=0.2)
