@@ -1,5 +1,7 @@
 
-from rlpoker.games.leduc import Leduc
+import numpy as np
+
+from rlpoker.games.leduc import Leduc, compute_state_vectors, compute_betting_rounds
 from rlpoker.games.card import Card
 
 def test_leduc():
@@ -82,3 +84,51 @@ def test_compute_showdown():
                                       {1: 10, 2: 10})
     expected = {1: -10, 2: 10}
     assert computed == expected
+
+
+def test_compute_betting_rounds():
+    info_set_ids = [
+        (-1, Card(1, 2), 1, 2, 2),
+        (-1, Card(1, 2), 1, 2, 2, Card(3, 3)),
+        (-1, Card(1, 2), 1, 2, 2, Card(3, 3), 1),
+        (Card(1, 2), -1, 2, 1, Card(3, 3), 1, 2)
+    ]
+
+    expected = [
+        ((1, 2, 2), (), 1),
+        ((1, 2, 2), (), 2),
+        ((1, 2, 2), (1,), 2),
+        ((2, 1), (1, 2), 2)
+    ]
+
+    for info_set_id, expected in zip(info_set_ids, expected):
+        assert expected == compute_betting_rounds(info_set_id)
+
+
+def test_compute_state_vectors():
+
+    card_indices = {Card(1, 2): 0,
+                    Card(2, 2): 1,
+                    Card(3, 3): 2}
+    info_set_ids = [
+        (-1, Card(1, 2), 1, 2, 2),
+        (-1, Card(1, 2), 1, 2, 2, Card(3, 3)),
+        (-1, Card(1, 2), 1, 2, 2, Card(3, 3), 1),
+        (Card(1, 2), -1, 2, 1, Card(3, 3), 1, 2)
+    ]
+
+    expected = [
+        np.concatenate([
+            np.array([1]),
+            np.array([1, 0, 0]),
+            np.array([0, 0, 0]),
+            np.array([0, 0, 1]),
+            np.array([0, 0, 0])], axis=0).astype(float)
+    ]
+    computed = compute_state_vectors(info_set_ids, card_indices, max_raises=2)
+
+    assert np.all(expected[0] == computed[info_set_ids[0]])
+
+
+if __name__ == "__main__":
+    test_compute_state_vectors()

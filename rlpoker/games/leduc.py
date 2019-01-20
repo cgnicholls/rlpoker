@@ -29,8 +29,23 @@ class Leduc(ExtensiveGame):
         assert len(set(cards)) == len(cards)
         self.cards = cards
 
+        self.max_raises = max_raises
+        self.raise_amount = raise_amount
+
         # Initialise the super class.
         super().__init__(root)
+
+        # We first define a one-hot-encoding based on the cards.
+        self.card_indices = dict(enumerate(cards))
+        self.card_indices = {v: k for k, v in self.card_indices.items()}
+
+        self.state_vectors = compute_state_vectors(self.info_set_ids.values(),
+                                                   self.card_indices, self.max_raises)
+
+        # Make sure the mappings are unique.
+
+        print(self.state_vectors)
+        assert len(set(self.state_vectors.keys())) == len({tuple(v) for v in self.state_vectors.values()})
 
     @staticmethod
     def create_tree(cards, max_raises, raise_amount):
@@ -59,9 +74,7 @@ class Leduc(ExtensiveGame):
             if state == "deal_card_1":
                 for c, n in Counter(remaining_cards).items():
                     current_node.hidden_from = [2]
-                    child_node = ExtensiveGameNode(0,
-                        action_list=action_list + (c,),
-                        hidden_from={1})
+                    child_node = ExtensiveGameNode(0, action_list=action_list + (c,), hidden_from={1})
                     current_node.children[c] = child_node
                     current_node.chance_probs[c] = n / len(remaining_cards)
                     index = remaining_cards.index(c)
@@ -72,8 +85,7 @@ class Leduc(ExtensiveGame):
             elif state == "deal_card_2":
                 for c, n in Counter(remaining_cards).items():
                     current_node.hidden_from = [1]
-                    child_node = ExtensiveGameNode(1,
-                        action_list=action_list + (c,))
+                    child_node = ExtensiveGameNode(1, action_list=action_list + (c,))
                     current_node.children[c] = child_node
                     current_node.chance_probs[c] = n / len(remaining_cards)
                     index = remaining_cards.index(c)
@@ -136,8 +148,7 @@ class Leduc(ExtensiveGame):
                     else:
                         next_state = "showdown"
                         next_player = -1
-                    child_node = ExtensiveGameNode(next_player,
-                        action_list + (1,))
+                    child_node = ExtensiveGameNode(next_player, action_list + (1,))
                     current_node.children[1] = child_node
                     next_pot = pot.copy()
                     to_explore.append((child_node, next_state,
@@ -145,8 +156,7 @@ class Leduc(ExtensiveGame):
 
                     # Bet
                     next_player = other_player[current_player]
-                    child_node = ExtensiveGameNode(next_player,
-                        action_list + (2,))
+                    child_node = ExtensiveGameNode(next_player, action_list + (2,))
                     current_node.children[2] = child_node
                     next_pot = pot.copy()
                     next_pot[current_player] += raise_amount[state]
@@ -167,8 +177,7 @@ class Leduc(ExtensiveGame):
                     else:
                         next_state = "showdown"
                         next_player = -1
-                    child_node = ExtensiveGameNode(next_player,
-                        action_list + (1,))
+                    child_node = ExtensiveGameNode(next_player, action_list + (1,))
                     current_node.children[1] = child_node
                     next_pot = pot.copy()
                     next_pot[current_player] += raise_amount[state]
@@ -274,46 +283,94 @@ class Leduc(ExtensiveGame):
             return {1: -pot[1], 2: pot[1]}
         else:
             return {1: 0, 2: 0}
-    #
-    # def compute_state_vectors(self):
-    #     """Computes a state vector for each information set id.
-    #
-    #     Returns:
-    #         dict. Dictionary with keys the information set ids and values
-    #         the vector representation as a numpy array.
-    #     """
-    #     # We first define a one-hot-encoding based on the cards.
-    #     card_indices = dict(enumerate(self.cards))
-    #     card_indices = {v: k for k, v in cards.items()}
-    #
-    #     state_vectors = {}
-    #     # Generate a vector for each information set.
-    #     for info_set_id in self.info_set_ids.values():
-    #         # The information set is of the form (hole1, hole2, <betting
-    #         # actions>, board, <betting actions>.
-    #
-    #         cards_in_play = [a for a in info_set_id if type(a) is Card]
-    #         assert len(cards_in_play) <= 1
-    #
-    #         # We can determine the player by which card is hidden from us.
-    #         player = 2 if info_set_id[0] == -1 else 1
-    #         hole = cards_in_play[0]
-    #
-    #         # We embed the hole card for the player to play, then the board
-    #         # card, then the round 1 betting actions, then the round 2
-    #         # betting actions.
-    #         hole_vec = np.zeros(len(card_indices), dtype=float)
-    #         hole_vec[card_indices[hole]] = 1.0
-    #
-    #         if len(cards_in_play) > 1:
-    #             board = cards_in_play[1]
-    #
-    #         board_vec = np.zeros(len(card_indices), dtype=float)
-    #         board_vec[card_indices[board]] = 1.0
-    #
-    #         # state_vectors[info_set_id] =
-    #         # TODO: FIXME
-    #
-    #     # Make sure the mappings are unique.
-    #     assert len(set(state_vectors.keys())) == \
-    #            len(set(state_vectors.values()))
+
+
+def compute_state_vectors(info_set_ids, card_indices, max_raises):
+    """Computes a state vector for each information set id. This is a unique vector
+    for each information set, which encodes the information set.
+
+    Args:
+        info_set_ids: iterable. Should be the ids for each information set.
+
+    Returns:
+        dict. Dictionary with keys the information set ids and values
+        the vector representation as a numpy array.
+    """
+    state_vectors = {}
+    # Generate a vector for each information set.
+    for info_set_id in info_set_ids:
+        # The information set is of the form (hole1, hole2, <betting
+        # actions>, board, <betting actions>.
+
+        cards_in_play = [a for a in info_set_id if type(a) is Card]
+        assert len(cards_in_play) <= 2
+
+        # The hole card is the first card we see.
+        hole = cards_in_play[0]
+
+        # The player is determined by which hole card is hidden.
+        player = 2 if info_set_id[0] == -1 else 1
+        player_vec = np.array([player - 1])
+
+        # We embed the hole card for the player to play, then the board
+        # card, then the round 1 betting actions, then the round 2
+        # betting actions.
+        hole_vec = one_hot_encoding(len(card_indices), card_indices[hole])
+
+        # If there is more than one card in play, then the board has been played.
+        if len(cards_in_play) > 1:
+            board = cards_in_play[1]
+            board_vec = one_hot_encoding(len(card_indices), card_indices[board])
+        else:
+            board_vec = np.zeros(len(card_indices), dtype=float)
+
+        actions1, actions2, current_round = compute_betting_rounds(info_set_id)
+
+        if current_round == 1:
+            num_raises1 = Counter(actions1)[2]
+            round1_vec = one_hot_encoding(max_raises + 1, num_raises1)
+            round2_vec = np.zeros(max_raises + 1, dtype=float)
+        else:
+            num_raises1 = Counter(actions1)[2]
+            num_raises2 = Counter(actions2)[2]
+
+            round1_vec = one_hot_encoding(max_raises + 1, num_raises1)
+            round2_vec = one_hot_encoding(max_raises + 1, num_raises2)
+
+        state_vectors[info_set_id] = np.concatenate(
+            [player_vec, hole_vec, board_vec, round1_vec, round2_vec], axis=0)
+
+    return state_vectors
+
+
+def compute_betting_rounds(info_set_id):
+    # We now encode the rounds.
+    card_locations = [i for i, a in enumerate(info_set_id) if type(a) is Card]
+
+    if len(card_locations) == 1:
+        actions1 = info_set_id[2:]
+        actions2 = ()
+        current_round = 1
+    elif len(card_locations) == 2:
+        actions1 = info_set_id[2:card_locations[1]]
+        actions2 = info_set_id[card_locations[1] + 1:]
+        current_round = 2
+    else:
+        assert False
+
+    return actions1, actions2, current_round
+
+
+def one_hot_encoding(dim, i):
+    """Returns the one hot vector length 'dim' with a 1 in the ith position (counting from zero).
+
+    Args:
+        dim: int. The length of the vector.
+        i: int. The index to put a 1 in.
+
+    Returns:
+        ndarray.
+    """
+    x = np.zeros(dim, dtype=float)
+    x[i] = 1.0
+    return x
