@@ -1,6 +1,8 @@
 # coding: utf-8
 # This implements Leduc Hold'em.
 
+import numpy as np
+
 from collections import deque, Counter
 
 from rlpoker.extensive_game import ExtensiveGame, ExtensiveGameNode
@@ -22,6 +24,10 @@ class Leduc(ExtensiveGame):
     def __init__(self, cards, max_raises=4, raise_amount=2):
         root = Leduc.create_tree(cards, max_raises=max_raises,
                                  raise_amount=raise_amount)
+
+        # Check all the cards are distinct
+        assert len(set(cards)) == len(cards)
+        self.cards = cards
 
         # Initialise the super class.
         super().__init__(root)
@@ -268,3 +274,46 @@ class Leduc(ExtensiveGame):
             return {1: -pot[1], 2: pot[1]}
         else:
             return {1: 0, 2: 0}
+    #
+    # def compute_state_vectors(self):
+    #     """Computes a state vector for each information set id.
+    #
+    #     Returns:
+    #         dict. Dictionary with keys the information set ids and values
+    #         the vector representation as a numpy array.
+    #     """
+    #     # We first define a one-hot-encoding based on the cards.
+    #     card_indices = dict(enumerate(self.cards))
+    #     card_indices = {v: k for k, v in cards.items()}
+    #
+    #     state_vectors = {}
+    #     # Generate a vector for each information set.
+    #     for info_set_id in self.info_set_ids.values():
+    #         # The information set is of the form (hole1, hole2, <betting
+    #         # actions>, board, <betting actions>.
+    #
+    #         cards_in_play = [a for a in info_set_id if type(a) is Card]
+    #         assert len(cards_in_play) <= 1
+    #
+    #         # We can determine the player by which card is hidden from us.
+    #         player = 2 if info_set_id[0] == -1 else 1
+    #         hole = cards_in_play[0]
+    #
+    #         # We embed the hole card for the player to play, then the board
+    #         # card, then the round 1 betting actions, then the round 2
+    #         # betting actions.
+    #         hole_vec = np.zeros(len(card_indices), dtype=float)
+    #         hole_vec[card_indices[hole]] = 1.0
+    #
+    #         if len(cards_in_play) > 1:
+    #             board = cards_in_play[1]
+    #
+    #         board_vec = np.zeros(len(card_indices), dtype=float)
+    #         board_vec[card_indices[board]] = 1.0
+    #
+    #         # state_vectors[info_set_id] =
+    #         # TODO: FIXME
+    #
+    #     # Make sure the mappings are unique.
+    #     assert len(set(state_vectors.keys())) == \
+    #            len(set(state_vectors.values()))

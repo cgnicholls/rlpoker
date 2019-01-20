@@ -49,3 +49,36 @@ def test_leduc():
     #  = 22. Since 2 put in 11 to this pot, they gain 22 - 11 = 11. Player 1
     #  loses 11.
     assert node.utility == {1: -11, 2: 11}
+
+
+def test_compute_showdown():
+
+    # Check that the same hole cards results in a draw.
+    computed = Leduc.compute_showdown(Card(2, 3), Card(2, 4), Card(1, 0),
+                                      {1: 10, 2: 10})
+    expected = {1: 0, 2: 0}
+    assert computed == expected
+
+    # Check that player 1 pair results in a win.
+    computed = Leduc.compute_showdown(Card(2, 3), Card(1, 4), Card(2, 0),
+                                      {1: 10, 2: 10})
+    expected = {1: 10, 2: -10}
+    assert computed == expected
+
+    # Check that player 2 pair results in a win.
+    computed = Leduc.compute_showdown(Card(1, 3), Card(2, 4), Card(2, 0),
+                                      {1: 10, 2: 10})
+    expected = {1: -10, 2: 10}
+    assert computed == expected
+
+    # Check that player 1 higher card and no pairs results in a win.
+    computed = Leduc.compute_showdown(Card(1, 3), Card(0, 4), Card(2, 0),
+                                      {1: 10, 2: 10})
+    expected = {1: 10, 2: -10}
+    assert computed == expected
+
+    # Check that player 2 higher card and no pairs results in a win.
+    computed = Leduc.compute_showdown(Card(1, 3), Card(3, 4), Card(2, 0),
+                                      {1: 10, 2: 10})
+    expected = {1: -10, 2: 10}
+    assert computed == expected
