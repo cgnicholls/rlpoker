@@ -40,7 +40,7 @@ def create_summary_tensors():
 def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
          final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
          max_train_steps=10000000, batch_size=128,
-         steps_before_training=100000, q_learn_every=32,
+         steps_before_training=5000, q_learn_every=32,
          policy_learn_every=128, verbose=False, players_to_train=(1,2),
          clip_reward=True):
 

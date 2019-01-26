@@ -157,7 +157,7 @@ class Agent:
         """
         strategy = dict()
         for info_set_id, state in states.items():
-            policy = self.predict_policy(sess, state)
+            policy = self.predict_policy(sess, [state]).ravel()
             strategy[info_set_id] = {i: policy[i] for i in range(len(policy))}
 
         return strategy
@@ -171,7 +171,7 @@ class Agent:
         Returns:
             float. Exploitability of the agent's strategy.
         """
-        states = game.get_state_vectors()
+        states = game._state_vectors
         strategy = self.get_strategy(sess, states)
 
-        return compute_exploitability(game, strategy)
+        return compute_exploitability(game._game, strategy)

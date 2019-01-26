@@ -320,7 +320,7 @@ class LeducNFSP(NFSPGame):
         else:
             player = node.player
             info_set_id = None
-            state_vector = None
+            state_vector = np.zeros(self.state_dim)
 
         # Set up available actions as a one-hot vector.
         available_actions = sorted(list(node.children.keys()))
@@ -370,17 +370,6 @@ class LeducNFSP(NFSPGame):
 
         # At this point, the current node is not a chance node.
         return self.summarise(self._current_node)
-
-    def encoding(self, info_set_id):
-        """Returns the precomputed state vector for this information set.
-
-        Args:
-            info_set_id: tuple. The tuple representing the information set.
-
-        Returns:
-            ndarray. A 1d numpy array representing the information set.
-        """
-        return self._state_vectors[info_set_id]
 
 
 def compute_state_vectors(info_set_ids, card_indices, max_raises):
