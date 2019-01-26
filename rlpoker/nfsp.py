@@ -2,12 +2,13 @@
 
 import tensorflow as tf
 import numpy as np
-from rlpoker.games.leduc import Leduc
+from rlpoker.nfsp_game import LeducNFSP
 from rlpoker.games.card import Card, get_deck
 from rlpoker.best_response import compute_exploitability
 from rlpoker.agent import Agent
 from time import time, gmtime, strftime
 import os
+
 
 def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
     train_fraction = float(train_step) / float(epsilon_steps)
@@ -37,10 +38,16 @@ def create_summary_tensors():
 
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
-def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.0, epsilon_steps=100000, eta=0.1, max_train_steps=10000000, batch_size=128, steps_before_training=100000, q_learn_every=32, policy_learn_every=128, verbose=False, players_to_train=[1,2], clip_reward=True):
+def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
+         final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
+         max_train_steps=10000000, batch_size=128,
+         steps_before_training=100000, q_learn_every=32,
+         policy_learn_every=128, verbose=False, players_to_train=(1,2),
+         clip_reward=True):
 
     # Create two agents
-    agents = {1: Agent('1', game.state_dim, game.action_dim), 2: Agent('2', game.state_dim, game.action_dim)}
+    agents = {1: Agent('1', game.state_dim, game.action_dim),
+              2: Agent('2', game.state_dim, game.action_dim)}
 
     # Create summary tensors
     summary_tensor = create_summary_tensors()
@@ -156,7 +163,9 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.
 
         # Train the Q-networks
         if train_step >= steps_before_training:
-            epsilon = compute_epsilon(initial_epsilon, final_epsilon, train_step - steps_before_training, epsilon_steps)
+            epsilon = compute_epsilon(initial_epsilon, final_epsilon,
+                                      train_step - steps_before_training,
+                                      epsilon_steps)
             for player in [1,2]:
                 if not player in players_to_train:
                     continue
@@ -167,7 +176,8 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.
                         q_losses[player].append(q_loss)
                 if train_step % policy_learn_every == 0:
                     for i in range(2):
-                        policy_loss = agent.train_policy_network(sess, batch_size)
+                        policy_loss = agent.train_policy_network(sess,
+                                                                 batch_size)
                         policy_losses[player].append(policy_loss)
 
                 # Update the target networks
@@ -176,13 +186,14 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.
                         print("Updating target networks")
                     agent.update_target_network(sess)
 
-        # Evaluate the best response network (the q network) for player 1 against
-        # player 2's average policy (the policy network), and vice versa.
+        # Evaluate the best response network (the q network) for player 1
+        # against player 2's average policy (the policy network), and vice
+        # versa.
         if train_step % update_target_q_every == 0:
             print("Train step: {}".format(train_step))
             if train_step > steps_before_training:
-                exploit1 = agents[1].compute_exploitability(game)
-                exploit2 = agents[2].compute_exploitability(game)
+                exploit1 = agents[1].compute_exploitability(sess, game)
+                exploit2 = agents[2].compute_exploitability(sess, game)
                 print("Exploitabilities: {}, {}".format(exploit1, exploit2))
                 print("Q losses: {}, {}".format(np.mean(q_losses[1]),
                                                 np.mean(q_losses[2])))
@@ -206,4 +217,4 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1, final_epsilon=0.
 
 if __name__ == '__main__':
     cards = get_deck(3, 2)
-    nfsp(Leduc(cards), verbose=False, eta=0.2)
+    nfsp(LeducNFSP(cards), verbose=False, eta=0.2)

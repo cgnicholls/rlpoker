@@ -3,7 +3,8 @@ from collections import Counter
 
 import numpy as np
 
-from rlpoker.games.leduc import Leduc, compute_state_vectors, compute_betting_rounds
+from rlpoker.games.leduc import (Leduc, compute_state_vectors,
+    compute_betting_rounds, LeducNFSP)
 from rlpoker.games.card import Card
 
 def test_leduc():
@@ -137,9 +138,9 @@ def test_compute_state_vectors():
 def test_compute_state_vectors_unique():
 
     cards = [Card(1, 2), Card(2, 2), Card(3, 3)]
-    game = Leduc(cards)
+    game = LeducNFSP(cards)
 
-    state_vectors = game.state_vectors
+    state_vectors = game._state_vectors
 
     seen_vectors = {}
 

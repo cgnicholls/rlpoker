@@ -7,6 +7,7 @@ from collections import deque, Counter
 
 from rlpoker.extensive_game import ExtensiveGame, ExtensiveGameNode
 from rlpoker.games.card import Card
+from rlpoker.nfsp_game import NFSPGame
 
 
 class Leduc(ExtensiveGame):
@@ -35,20 +36,6 @@ class Leduc(ExtensiveGame):
         # Initialise the super class.
         super().__init__(root)
 
-        # We first define a one-hot-encoding based on the cards.
-        self.card_indices = dict(enumerate(cards))
-        self.card_indices = {v: k for k, v in self.card_indices.items()}
-
-        self.state_vectors = compute_state_vectors(self.info_set_ids.values(),
-                                                   self.card_indices, self.max_raises)
-
-        # Make sure the mappings are unique.
-        assert len(set(self.state_vectors.keys())) == len({tuple(v) for v in self.state_vectors.values()})
-
-        # Make sure all the vectors are the same length.
-        assert len(set(len(tuple(v)) for v in self.state_vectors.values())) == 1
-        self.state_dim = list(len(tuple(v)) for v in self.state_vectors.values())[0]
-        self.action_dim = 3
 
     @staticmethod
     def create_tree(cards, max_raises, raise_amount):
@@ -286,6 +273,76 @@ class Leduc(ExtensiveGame):
             return {1: -pot[1], 2: pot[1]}
         else:
             return {1: 0, 2: 0}
+
+
+class LeducNFSP(NFSPGame):
+
+    def __init__(self, cards, max_raises=4, raise_amount=2):
+        self._game = Leduc(cards, max_raises=max_raises,
+                          raise_amount=raise_amount)
+
+        self._current_node = None
+
+        # Now compute the state vectors.
+        # We first define a one-hot-encoding based on the cards.
+        self._card_indices = dict(enumerate(cards))
+        self._card_indices = {v: k for k, v in self._card_indices.items()}
+
+        self._state_vectors = compute_state_vectors(
+            self._game.info_set_ids.values(),
+            self._card_indices,
+            self._game.max_raises)
+
+        # Make sure the mappings are unique.
+        assert len(set(self._state_vectors.keys())) == len({tuple(v) for v
+                                                            in
+                                                            self._state_vectors.values()})
+
+        # Make sure all the vectors are the same length.
+        lengths = [len(tuple(v)) for v in self._state_vectors.values()]
+        assert len(set(lengths)) == 1
+        self.state_dim = lengths[0]
+        self.action_dim = 3
+
+    def reset(self):
+        self._current_node = self._game.root
+
+        # If this is a chance node, then sample an action and move to the
+        # next node. Repeat until we reach a player node.
+        if self._current_node.player == 0:
+            actions = self._current_node.children.keys()
+            action = np.random.choice(actions)
+
+        return
+
+    def step(self, action):
+        """This function takes the given action for the player to play in
+        self._current_node.
+
+        Args:
+            action: one of the keys in self._current_node.children.
+
+        Returns:
+            player in next node, state of next node, rewards, is the next
+            node terminal.
+        """
+        # Check the action is available.
+        assert action in self._current_node.children
+
+        self._current_node = self._current_node[action]
+
+        # If it's a chance node, then we sample an action.
+
+    def encoding(self, info_set_id):
+        """Returns the precomputed state vector for this information set.
+
+        Args:
+            info_set_id: tuple. The tuple representing the information set.
+
+        Returns:
+            ndarray. A 1d numpy array representing the information set.
+        """
+        return self._state_vectors[info_set_id]
 
 
 def compute_state_vectors(info_set_ids, card_indices, max_raises):
