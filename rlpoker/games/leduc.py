@@ -304,16 +304,38 @@ class LeducNFSP(NFSPGame):
         self.state_dim = lengths[0]
         self.action_dim = 3
 
-    def reset(self):
+    @staticmethod
+    def summarise(player_map, state_vectors, node):
+        """Returns next player, state vector, rewards, terminal.
+
+        Args:
+            state_vectors
+            node
+        """
+        is_terminal = node.player == -1
+        # Compute utility via the player map.
+        utility = {player: node.utility[player_map[player]] for
+                   player in player_map}
+        return node.player, state_vectors[node], node.utility, is_terminal
+
+    def reset(self, first_player):
         self._current_node = self._game.root
+
+        second_player = 2 if first_player == 1 else 1
+        self._player_map = {first_player: 1, second_player: 2}
 
         # If this is a chance node, then sample an action and move to the
         # next node. Repeat until we reach a player node.
-        if self._current_node.player == 0:
-            actions = self._current_node.children.keys()
-            action = np.random.choice(actions)
+        while self._current_node.player == 0:
+            actions = list(self._current_node.children.keys())
+            action_idx = np.random.choice(len(actions))
+            action = actions[action_idx]
+            self._current_node = self._current_node.children[action]
 
-        return
+        # At this point, the current node is not a chance node.
+
+        return self.summarise(self._player_map, self._state_vectors,
+                              self._current_node)
 
     def step(self, action):
         """This function takes the given action for the player to play in
@@ -326,12 +348,24 @@ class LeducNFSP(NFSPGame):
             player in next node, state of next node, rewards, is the next
             node terminal.
         """
-        # Check the action is available.
+        # Check the action is available and it's a player node.
         assert action in self._current_node.children
+        assert self._current_node.player != 0
 
+        # Take the action
         self._current_node = self._current_node[action]
 
-        # If it's a chance node, then we sample an action.
+        # If this is a chance node, then sample an action and move to the
+        # next node. Repeat until we reach a player node.
+        while self._current_node.player == 0:
+            actions = list(self._current_node.children.keys())
+            action_idx = np.random.choice(len(actions))
+            action = actions[action_idx]
+            self._current_node = self._current_node.children[action]
+
+        # At this point, the current node is not a chance node.
+        return self.summarise(self._player_map, self._state_vectors,
+                              self._current_node)
 
     def encoding(self, info_set_id):
         """Returns the precomputed state vector for this information set.

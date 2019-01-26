@@ -2,9 +2,8 @@
 
 import tensorflow as tf
 import numpy as np
-from rlpoker.nfsp_game import LeducNFSP
-from rlpoker.games.card import Card, get_deck
-from rlpoker.best_response import compute_exploitability
+from rlpoker.games.leduc import LeducNFSP
+from rlpoker.games.card import get_deck
 from rlpoker.agent import Agent
 from time import time, gmtime, strftime
 import os
