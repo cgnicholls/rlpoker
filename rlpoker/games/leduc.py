@@ -304,19 +304,27 @@ class LeducNFSP(NFSPGame):
         self.state_dim = lengths[0]
         self.action_dim = 3
 
-    @staticmethod
-    def summarise(player_map, state_vectors, node):
-        """Returns next player, state vector, rewards, terminal.
-
-        Args:
-            state_vectors
-            node
+    def summarise(self, node):
+        """Returns next player, state vector, available actions, rewards,
+        terminal.
         """
         is_terminal = node.player == -1
         # Compute utility via the player map.
-        utility = {player: node.utility[player_map[player]] for
-                   player in player_map}
-        return node.player, state_vectors[node], node.utility, is_terminal
+        utility = {player: node.utility[self._player_map[player]] for
+                   player in node.utility}
+
+        if not is_terminal:
+            player = self._player_map[node.player]
+            info_set_id = self._game.info_set_ids[node]
+            state_vector = self._state_vectors[info_set_id]
+        else:
+            player = node.player
+            info_set_id = None
+            state_vector = None
+
+        # Set up available actions as a one-hot vector.
+        available_actions = sorted(list(node.children.keys()))
+        return player, state_vector, available_actions, utility, is_terminal
 
     def reset(self, first_player):
         self._current_node = self._game.root
@@ -332,10 +340,7 @@ class LeducNFSP(NFSPGame):
             action = actions[action_idx]
             self._current_node = self._current_node.children[action]
 
-        # At this point, the current node is not a chance node.
-
-        return self.summarise(self._player_map, self._state_vectors,
-                              self._current_node)
+        return self.summarise(self._current_node)
 
     def step(self, action):
         """This function takes the given action for the player to play in
@@ -353,7 +358,7 @@ class LeducNFSP(NFSPGame):
         assert self._current_node.player != 0
 
         # Take the action
-        self._current_node = self._current_node[action]
+        self._current_node = self._current_node.children[action]
 
         # If this is a chance node, then sample an action and move to the
         # next node. Repeat until we reach a player node.
@@ -364,8 +369,7 @@ class LeducNFSP(NFSPGame):
             self._current_node = self._current_node.children[action]
 
         # At this point, the current node is not a chance node.
-        return self.summarise(self._player_map, self._state_vectors,
-                              self._current_node)
+        return self.summarise(self._current_node)
 
     def encoding(self, info_set_id):
         """Returns the precomputed state vector for this information set.

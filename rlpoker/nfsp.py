@@ -94,7 +94,7 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
             print("Strategies: {}".format(strategies))
 
         # Play one game
-        next_player, state, _, _ = game.reset(first_player)
+        next_player, state, available_actions, _, _ = game.reset(first_player)
         terminal = False
         player = next_player
         while not terminal:
@@ -109,18 +109,26 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
                     print("Playing with q")
                 # Epsilon greedy strategy
                 if np.random.random() < epsilon:
-                    action = np.random.choice([0,1,2])
+                    action = np.random.choice(available_actions)
                 else:
-                    q_values = agent.predict_q(sess, [state])
-                    action = np.argmax(q_values, axis=1)[0]
+                    q_values = agent.predict_q(sess, [state]).ravel()
+                    for i in range(len(q_values)):
+                        if i not in available_actions:
+                            q_values[i] = -np.inf
+                    action = np.argmax(q_values)
             else:
                 if verbose:
                     print("Playing with policy")
                 policy = agent.predict_policy(sess, [state])
+                policy = normalise_policy(policy.ravel(), available_actions)
+
+                # We first normalise the probabilities to the available
+                # actions.
                 action = np.random.choice([0,1,2], p=policy.ravel())
             if verbose:
                 print("Takes action: {}".format(action))
-            next_player, next_state, rewards, terminal = game.step(action)
+            next_player, next_state, available_actions, rewards, terminal = \
+                game.step(action)
             if verbose:
                 print("Next player: {}".format(next_player))
                 print("Rewards: {}".format(rewards))
@@ -213,6 +221,18 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
                 tf_train_writer.add_summary(summary, train_step)
 
     return agents
+
+
+def normalise_policy(policy, available_actions):
+    assert len(policy.shape) == 1
+    one_hot = np.zeros(policy.shape[0], dtype=float)
+    for i in available_actions:
+        one_hot[i] = 1.0
+
+    policy *= one_hot
+
+    return policy / np.sum(policy)
+
 
 if __name__ == '__main__':
     cards = get_deck(3, 2)
