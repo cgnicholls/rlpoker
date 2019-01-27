@@ -7,7 +7,8 @@ from rlpoker.best_response import compute_exploitability
 
 class Agent:
     def __init__(self, name, input_dim, action_dim, max_replay=100000,
-                 max_supervised=100000, best_response_lr=1e-2, supervised_lr=1e-3):
+                 max_supervised=100000, best_response_lr=1e-4,
+                 supervised_lr=1e-5):
         self.replay_memory = deque(maxlen=max_replay)
         self.supervised_memory = deque(maxlen=max_supervised)
 
@@ -105,7 +106,8 @@ class Agent:
         })
         return policy_loss
 
-    # Create a 2 layer neural network with relu activations on the hidden layer. The output is the predicted q-value of an action.
+    # Create a 2 layer neural network with relu activations on the hidden
+    # layer. The output is the predicted q-value of an action.
     def create_q_network(self, scope, input_dim, action_dim, num_hidden=2,
                          hidden_dim=20, l2_reg=1e-3):
         with tf.variable_scope(scope):
