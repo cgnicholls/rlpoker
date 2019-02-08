@@ -5,52 +5,79 @@ import numpy as np
 
 from rlpoker.best_response import compute_exploitability
 
+class Reservoir:
+    def __init__(self, max_len):
+        self.max_len = max_len
+        self.i = 0
+        self.reservoir = deque()
+
+    def append(self, item):
+        """Implements reservoir sampling.
+
+        Let the item be the ith item. If i < self.max_len, then we keep the item. Otherwise, we keep the new item with
+        probability self.max_len / i and otherwise discard it. If we keep the new item, we randomly choose an old item
+        to discard.
+        """
+        self.i += 1
+        if len(self.reservoir) < self.max_len:
+            self.reservoir.append(item)
+        else:
+            # With probability self.max_len / i, replace an existing item with the new item.
+            if np.random.rand() < self.max_len / self.i:
+                discard_idx = np.random.choice(self.max_len)
+                self.reservoir[discard_idx] = item
+
+    def sample(self, n):
+        """Samples n items randomly from the reservoir.
+        """
+        return random.sample(self.reservoir, n)
+
+
 class Agent:
-    def __init__(self, name, input_dim, action_dim, max_replay=100000,
-                 max_supervised=100000, best_response_lr=1e-4,
+    def __init__(self, name, input_dim, action_dim, max_replay=200000,
+                 max_supervised=2000000, best_response_lr=1e-4,
                  supervised_lr=1e-5):
-        self.replay_memory = deque(maxlen=max_replay)
-        self.supervised_memory = deque(maxlen=max_supervised)
+        self.replay_memory = Reservoir(max_replay)
+        self.supervised_memory = Reservoir(max_supervised)
 
         self.name = name
+        with tf.variable_scope('agent_{}'.format(name)):
+            self.q_network = self.create_q_network('current_q', input_dim, action_dim)
+            self.target_q_network = self.create_q_network('target_q', input_dim, action_dim)
+            self.policy_network = self.create_policy_network('policy', input_dim, action_dim)
 
-        self.q_network = self.create_q_network('current_q' + name, input_dim, action_dim)
-        self.target_q_network = self.create_q_network('target_q' + name, input_dim, action_dim)
-        self.policy_network = self.create_policy_network('policy' + name, input_dim, action_dim)
+            # Create ops for copying current network to target network. We create a list
+            # of the variables in both networks and then create an assign operation that
+            # copies the value in the current variable to the corresponding target variable.
+            current_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='current_q')
+            target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q')
+            self.update_ops = [t.assign(c) for t, c in zip(target_vars, current_vars)]
 
-        # Create ops for copying current network to target network. We create a list
-        # of the variables in both networks and then create an assign operation that
-        # copies the value in the current variable to the corresponding target variable.
-        current_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='current_q' + name)
-        target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q' + name)
-        self.update_ops = []
-        for i in range(len(current_vars)):
-            self.update_ops.append(target_vars[i].assign(current_vars[i]))
+            # Set up Q-learning loss functions
+            self.predicted_next_q = tf.placeholder('float32', shape=[None, action_dim], name='predicted_next_q')
+            self.reward = tf.placeholder('float32', shape=[None])
+            self.action = tf.placeholder('int32', shape=[None])
+            one_hot_action = tf.one_hot(self.action, action_dim)
 
-        # Set up Q-learning loss functions
-        self.predicted_next_q = tf.placeholder('float32', shape=[None,
-                                                                 action_dim])
-        self.reward = tf.placeholder('float32', shape=[None])
-        self.action = tf.placeholder('int32', shape=[None])
-        one_hot_action = tf.one_hot(self.action, action_dim)
+            with tf.variable_scope('current_q'):
+                q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
+                self.not_terminals = tf.placeholder('float32', shape=[None])
+                next_q = self.reward + self.not_terminals * tf.reduce_max(self.predicted_next_q, axis=1)
+                self.q_loss = tf.reduce_mean((next_q - q_value)**2)
+                self.q_trainer = tf.train.GradientDescentOptimizer(best_response_lr).minimize(self.q_loss)
 
-        with tf.variable_scope('current_q' + name):
-            q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
-            self.not_terminals = tf.placeholder('float32', shape=[None])
-            next_q = self.reward + self.not_terminals * tf.reduce_max(self.predicted_next_q, axis=1)
-            self.q_loss = tf.reduce_mean((next_q - q_value)**2)
-            self.q_trainer = tf.train.AdamOptimizer(best_response_lr).minimize(self.q_loss)
-
-        with tf.variable_scope('policy' + name):
-            policy_for_actions = tf.reduce_sum(self.policy_network['output'] * one_hot_action, axis=1)
-            self.policy_loss = tf.reduce_mean(-tf.log(policy_for_actions))
-            self.policy_trainer = tf.train.AdamOptimizer(supervised_lr).minimize(self.policy_loss)
+            with tf.variable_scope('policy'):
+                policy_for_actions = tf.reduce_sum(self.policy_network['output'] * one_hot_action, axis=1)
+                self.policy_loss = tf.reduce_mean(-tf.log(policy_for_actions))
+                self.policy_trainer = tf.train.GradientDescentOptimizer(supervised_lr).minimize(self.policy_loss)
 
     def append_replay_memory(self, transitions):
-        self.replay_memory.extend(transitions)
+        for transition in transitions:
+            self.replay_memory.append(transition)
 
     def append_supervised_memory(self, state_action_pairs):
-        self.supervised_memory.extend(state_action_pairs)
+        for state_action_pair in state_action_pairs:
+            self.supervised_memory.append(state_action_pair)
 
     # Get the output of the q network for the given state
     def predict_q(self, sess, state):
@@ -70,7 +97,7 @@ class Agent:
 
     def train_q_network(self, sess, batch_size):
         # Sample a minibatch from the replay memory
-        minibatch = random.sample(self.replay_memory, batch_size)
+        minibatch = self.replay_memory.sample(batch_size)
 
         states = [d['state'] for d in minibatch]
         actions = [d['action'] for d in minibatch]
@@ -95,7 +122,7 @@ class Agent:
 
     def train_policy_network(self, sess, batch_size):
         # Sample a minibatch from the supervised memory
-        minibatch = random.sample(self.supervised_memory, batch_size)
+        minibatch = self.supervised_memory.sample(batch_size)
 
         states = [d['state'] for d in minibatch]
         actions = [d['action'] for d in minibatch]
@@ -108,8 +135,7 @@ class Agent:
 
     # Create a 2 layer neural network with relu activations on the hidden
     # layer. The output is the predicted q-value of an action.
-    def create_q_network(self, scope, input_dim, action_dim, num_hidden=2,
-                         hidden_dim=20, l2_reg=1e-3):
+    def create_q_network(self, scope, input_dim, action_dim, num_hidden=2, hidden_dim=64):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder('float32', shape=[None, input_dim])
 
@@ -118,33 +144,28 @@ class Agent:
             for i in range(num_hidden):
                 hidden_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=hidden_dim,
                 activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(),
-                biases_initializer=tf.zeros_initializer(),
-                weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
+                biases_initializer=tf.zeros_initializer())
 
             output_layer = tf.contrib.layers.fully_connected(hidden_layer,
                                                              num_outputs=action_dim,
             weights_initializer=tf.contrib.layers.xavier_initializer(),
-            biases_initializer=tf.zeros_initializer(),
-            weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
+            biases_initializer=tf.zeros_initializer())
         return {'input': input_layer, 'output': output_layer}
 
-    def create_policy_network(self, scope, input_dim, action_dim,
-                              num_hidden=2, hidden_dim=10, l2_reg=1e-3):
+    def create_policy_network(self, scope, input_dim, action_dim, num_hidden=2, hidden_dim=64):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder('float32', shape=[None, input_dim])
 
             hidden_layer = input_layer
             for i in range(num_hidden):
-                hidden_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=num_hidden,
+                hidden_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=hidden_dim,
                 activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(),
-                biases_initializer=tf.zeros_initializer(),
-                weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
+                biases_initializer=tf.zeros_initializer())
 
             output_layer = tf.contrib.layers.fully_connected(hidden_layer,
                                                              num_outputs=action_dim,
             activation_fn=tf.nn.softmax, weights_initializer=tf.contrib.layers.xavier_initializer(),
-            biases_initializer=tf.zeros_initializer(),
-            weights_regularizer=tf.contrib.layers.l2_regularizer(l2_reg))
+            biases_initializer=tf.zeros_initializer())
         return {'input': input_layer, 'output': output_layer}
 
     def get_strategy(self, sess, states):

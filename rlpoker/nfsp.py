@@ -37,16 +37,18 @@ def create_summary_tensors():
 
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
-def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
+def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
          final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
          max_train_steps=10000000, batch_size=128,
-         steps_before_training=100000, q_learn_every=32,
-         policy_learn_every=128, verbose=False, players_to_train=(1,2),
-         clip_reward=True):
+         steps_before_training=10000, q_learn_every=32,
+         policy_learn_every=32, verbose=False,
+         clip_reward=True, best_response_lr=0.1, supervised_lr=0.005):
 
     # Create two agents
-    agents = {1: Agent('1', game.state_dim, game.action_dim),
-              2: Agent('2', game.state_dim, game.action_dim)}
+    agents = {1: Agent('1', game.state_dim, game.action_dim,
+                       best_response_lr=best_response_lr, supervised_lr=supervised_lr),
+              2: Agent('2', game.state_dim, game.action_dim,
+                       best_response_lr=best_response_lr, supervised_lr=supervised_lr)}
 
     # Create summary tensors
     summary_tensor = create_summary_tensors()
@@ -174,8 +176,6 @@ def nfsp(game, update_target_q_every=1000, initial_epsilon=0.1,
                                       train_step - steps_before_training,
                                       epsilon_steps)
             for player in [1,2]:
-                if not player in players_to_train:
-                    continue
                 agent = agents[player]
                 if train_step % q_learn_every == 0:
                     for i in range(2):
