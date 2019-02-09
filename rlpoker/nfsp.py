@@ -56,7 +56,7 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
     # Merge all summaries
     merged = tf.summary.merge_all()
 
-    time_str = strftime("%d-%m-%Y-%H:%M:%S", gmtime())
+    time_str = strftime("%Y-%m-%d-%H:%M:%S", gmtime())
     save_path = os.path.join('experiments', time_str)
 
     if not os.path.exists(save_path):
