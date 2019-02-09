@@ -6,25 +6,25 @@ import numpy as np
 from rlpoker.best_response import compute_exploitability
 
 class Reservoir:
-    def __init__(self, max_len):
-        self.max_len = max_len
+    def __init__(self, maxlen):
+        self.maxlen = maxlen
         self.i = 0
         self.reservoir = deque()
 
     def append(self, item):
         """Implements reservoir sampling.
 
-        Let the item be the ith item. If i < self.max_len, then we keep the item. Otherwise, we keep the new item with
-        probability self.max_len / i and otherwise discard it. If we keep the new item, we randomly choose an old item
+        Let the item be the ith item. If i < self.maxlen, then we keep the item. Otherwise, we keep the new item with
+        probability self.maxlen / i and otherwise discard it. If we keep the new item, we randomly choose an old item
         to discard.
         """
         self.i += 1
-        if len(self.reservoir) < self.max_len:
+        if len(self.reservoir) < self.maxlen:
             self.reservoir.append(item)
         else:
-            # With probability self.max_len / i, replace an existing item with the new item.
-            if np.random.rand() < self.max_len / self.i:
-                discard_idx = np.random.choice(self.max_len)
+            # With probability self.maxlen / i, replace an existing item with the new item.
+            if np.random.rand() < self.maxlen / self.i:
+                discard_idx = np.random.choice(self.maxlen)
                 self.reservoir[discard_idx] = item
 
     def sample(self, n):
@@ -33,11 +33,31 @@ class Reservoir:
         return random.sample(self.reservoir, n)
 
 
+class CircularBuffer:
+    """Implements a circular buffer with maximum length.
+    """
+
+    def __init__(self, maxlen=None):
+        self.maxlen = maxlen
+        self.buffer = deque(maxlen=maxlen)
+
+    def append(self, item):
+        """Appends an item to the buffer.
+        """
+        self.buffer.append(item)
+
+    def sample(self, n):
+        """Samples n items randomly from the buffer.
+        """
+        return random.sample(self.buffer, n)
+
+
 class Agent:
     def __init__(self, name, input_dim, action_dim, max_replay=200000,
                  max_supervised=2000000, best_response_lr=1e-4,
                  supervised_lr=1e-5):
-        self.replay_memory = Reservoir(max_replay)
+        # Replay memory is a circular buffer, and supervised learning memory is a reservoir.
+        self.replay_memory = CircularBuffer(max_replay)
         self.supervised_memory = Reservoir(max_supervised)
 
         self.name = name
