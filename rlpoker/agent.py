@@ -3,59 +3,7 @@ from collections import deque
 import random
 import numpy as np
 
-from rlpoker.best_response import compute_exploitability
-
-class Reservoir:
-    def __init__(self, maxlen):
-        self.maxlen = maxlen
-        self.i = 0
-        self.reservoir = deque()
-
-    def append(self, item):
-        """Implements reservoir sampling.
-
-        Let the item be the ith item. If i < self.maxlen, then we keep the item. Otherwise, we keep the new item with
-        probability self.maxlen / i and otherwise discard it. If we keep the new item, we randomly choose an old item
-        to discard.
-        """
-        self.i += 1
-        if len(self.reservoir) < self.maxlen:
-            self.reservoir.append(item)
-        else:
-            # With probability self.maxlen / i, replace an existing item with the new item.
-            if np.random.rand() < self.maxlen / self.i:
-                discard_idx = np.random.choice(self.maxlen)
-                self.reservoir[discard_idx] = item
-
-    def sample(self, n):
-        """Samples n items randomly from the reservoir.
-        """
-        return random.sample(self.reservoir, n)
-
-    def __len__(self):
-        return len(self.reservoir)
-
-
-class CircularBuffer:
-    """Implements a circular buffer with maximum length.
-    """
-
-    def __init__(self, maxlen=None):
-        self.maxlen = maxlen
-        self.buffer = deque(maxlen=maxlen)
-
-    def append(self, item):
-        """Appends an item to the buffer.
-        """
-        self.buffer.append(item)
-
-    def sample(self, n):
-        """Samples n items randomly from the buffer.
-        """
-        return random.sample(self.buffer, n)
-
-    def __len__(self):
-        return len(self.buffer)
+from rlpoker.buffer import Reservoir, CircularBuffer
 
 
 class Agent:
@@ -78,8 +26,8 @@ class Agent:
             # Create ops for copying current network to target network. We create a list
             # of the variables in both networks and then create an assign operation that
             # copies the value in the current variable to the corresponding target variable.
-            current_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='current_q')
-            target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q')
+            current_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_{}/current_q'.format(name))
+            target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_{}/target_q'.format(name))
             self.update_ops = [t.assign(c) for t, c in zip(target_vars, current_vars)]
 
             # Set up Q-learning loss functions
@@ -89,8 +37,8 @@ class Agent:
 
             q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
             self.not_terminals = tf.placeholder('float32', shape=[None])
-            next_q = self.reward + self.not_terminals * tf.reduce_max(tf.stop_gradient(self.target_q_network['output']),
-                                                                      axis=1)
+            next_q = self.reward + self.not_terminals * tf.reduce_max(tf.stop_gradient(
+                self.target_q_network['output']), axis=1)
             self.q_loss = tf.reduce_mean(tf.square(next_q - q_value))
             self.q_trainer = tf.train.GradientDescentOptimizer(best_response_lr).minimize(self.q_loss)
 
@@ -127,6 +75,7 @@ class Agent:
         sess.run(self.update_ops)
 
     def train_q_network(self, sess, batch_size):
+        # import ipdb; ipdb.set_trace()
         # Sample a minibatch from the replay memory
         minibatch = self.replay_memory.sample(batch_size)
 
@@ -201,17 +150,3 @@ class Agent:
             strategy[info_set_id] = {i: policy[i] for i in range(len(policy))}
 
         return strategy
-
-    def compute_exploitability(self, sess, game):
-        """Computes the exploitability of the agent's current strategy.
-
-        Args:
-            game: ExtensiveGame.
-
-        Returns:
-            float. Exploitability of the agent's strategy.
-        """
-        states = game._state_vectors
-        strategy = self.get_strategy(sess, states)
-
-        return compute_exploitability(game._game, strategy)

@@ -107,7 +107,7 @@ def compute_best_response(game, strategy, i):
 
 
 def compute_exploitability(game, strategy):
-    """ Computes the exploitability of a given strategy. The strategy must
+    """Computes the exploitability of a given strategy. The strategy must
     implement both player 1 and player 2 information sets.
     """
     # First compute the best response against the strategy when the strategy

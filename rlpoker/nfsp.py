@@ -7,9 +7,11 @@ import os
 import numpy as np
 import tensorflow as tf
 
+from rlpoker.nfsp_game import NFSPGame
 from rlpoker.games.leduc import LeducNFSP
 from rlpoker.games.card import get_deck
 from rlpoker.agent import Agent
+from rlpoker.best_response import compute_exploitability
 
 
 def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
@@ -19,6 +21,45 @@ def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
     if train_fraction > 1.0:
         train_fraction = 1.0
     return (1-train_fraction) * initial_epsilon + train_fraction * final_epsilon
+
+
+def compute_agent_exploitability(agent: Agent, sess: tf.Session, game: NFSPGame):
+    """Computes the exploitability of the agent's current strategy.
+
+    Args:
+        agent: Agent.
+        sess: tensorflow session.
+        game: ExtensiveGame.
+
+    Returns:
+        float. Exploitability of the agent's strategy.
+    """
+    states = game._state_vectors
+    strategy = agent.get_strategy(sess, states)
+
+    return compute_exploitability(game._game, strategy)
+
+
+def build_transitions(states, actions, rewards):
+    """Creates a dictionary with keys the players and values a list of transitions for that player. Each transition
+    is a dictionary with keys 'state', 'action', 'reward', 'next_state', 'is_terminal'.
+    """
+    players = list(rewards.keys())
+    transitions = {player: [] for player in players}
+    for player in players:
+        num_transitions = len(actions[player])
+        assert len(states[player]) == num_transitions + 1
+        for i in range(num_transitions):
+            is_terminal = True if i == num_transitions - 1 else False
+            reward = rewards[player] if is_terminal else 0.0
+            transitions[player].append(
+                {'state': states[player][i],
+                 'next_state': states[player][i+1],
+                 'action': actions[player][i],
+                 'reward': reward,
+                 'terminal': is_terminal})
+
+    return transitions
 
 
 def create_summary_tensors():
@@ -45,7 +86,7 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
          max_train_steps=10000000, batch_size=128,
          steps_before_training=10000, q_learn_every=1,
          policy_learn_every=1, verbose=False,
-         clip_reward=True, best_response_lr=1e-3, supervised_lr=1e-3,
+         clip_reward=True, best_response_lr=1e-1, supervised_lr=5e-3,
          train_players=(1, 2)):
 
     # Create two agents
@@ -86,11 +127,12 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
     for train_step in range(max_train_steps):
         # Choose random player to start the game
         first_player = np.random.choice([1, 2])
-        first_player = 1
+        # first_player = 1
         if verbose:
             print("First player: {}".format(first_player))
 
-        transitions = {1: [], 2: []}
+        states = {1: [], 2: []}
+        actions = {1: [], 2: []}
         supervised = {1: [], 2: []}
         # Select the strategies
         strategy1 = np.random.choice(['q', 'policy'], p=[eta, 1.0-eta])
@@ -133,7 +175,7 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
 
                 # We first normalise the probabilities to the available
                 # actions.
-                action = np.random.choice([0,1,2], p=policy)
+                action = np.random.choice([0, 1, 2], p=policy)
             if verbose:
                 print("Takes action: {}".format(action))
             next_player, next_state, available_actions, rewards, terminal = \
@@ -145,11 +187,8 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
 
             # Add the transitions (ignoring reward and terminal for now,
             # since we will update this later).
-            transitions[player].append({'state': state,
-                                        'next_state': next_state,
-                                        'action': action,
-                                        'reward': 0.0,
-                                        'terminal': False})
+            states[player].append(state)
+            actions[player].append(action)
 
             # Only add to the supervised learning memory if we were playing our
             # best response strategy.
@@ -160,6 +199,18 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
             player = next_player
             state = next_state
 
+        # This state is terminal, so add a terminal state to each player's states.
+        # TODO: Make more generic. Currently next_state makes sense for both players, but this isn't the case for
+        # all games.
+        states[1].append(next_state)
+        states[2].append(next_state)
+
+        # Now build the transitions for each player from states, actions and rewards.
+        if clip_reward:
+            rewards = {k: np.clip(v, -1.0, 1.0) for k, v in rewards.items()}
+
+        transitions = build_transitions(states, actions, rewards)
+
         if verbose:
             print("Terminal node: {}".format(game._current_node))
 
@@ -168,19 +219,11 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
         # to the correct agents.
 
         for player in [1, 2]:
-            if len(transitions[player]) > 0:
-                if clip_reward:
-                    reward = np.clip(rewards[player], -1.0, 1.0)
-                else:
-                    reward = rewards[player]
-                transitions[player][-1]['reward'] = reward
-                transitions[player][-1]['terminal'] = True
             if verbose:
                 print("Adding transitions to player: {}".format(player))
                 print(transitions[player])
-            if train_step < steps_before_training:
-                agents[player].append_replay_memory(transitions[player])
-                agents[player].append_supervised_memory(supervised[player])
+            agents[player].append_replay_memory(transitions[player])
+            agents[player].append_supervised_memory(supervised[player])
 
         # Train the Q-networks
         if train_step >= steps_before_training:
@@ -209,8 +252,8 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
         if train_step % update_target_q_every == 0:
             print("Train step: {}".format(train_step))
             if train_step > steps_before_training:
-                exploit1 = agents[1].compute_exploitability(sess, game)
-                exploit2 = agents[2].compute_exploitability(sess, game)
+                exploit1 = compute_agent_exploitability(agents[1], sess, game)
+                exploit2 = compute_agent_exploitability(agents[2], sess, game)
                 print("Exploitabilities: {}, {}".format(exploit1, exploit2))
                 print("Q losses: {}, {}".format(np.mean(q_losses[1]),
                                                 np.mean(q_losses[2])))
@@ -263,7 +306,10 @@ if __name__ == '__main__':
                         help='If given, then clip rewards to -1, 1 range.')
     parser.add_argument('--eta', type=float, default=0.1,
                         help='The parameter eta as in the paper. Defaults to 0.1')
+    parser.add_argument('--steps_before_training', type=int, default=10000,
+                        help='Steps before training. Defaults to 10,000.')
     args = parser.parse_args()
 
     cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
-    nfsp(LeducNFSP(cards), verbose=args.verbose, eta=args.eta, clip_reward=args.clip_reward)
+    nfsp(LeducNFSP(cards), verbose=args.verbose, eta=args.eta, clip_reward=args.clip_reward,
+         steps_before_training=args.steps_before_training)
