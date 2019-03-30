@@ -32,6 +32,9 @@ class Reservoir:
         """
         return random.sample(self.reservoir, n)
 
+    def __len__(self):
+        return len(self.reservoir)
+
 
 class CircularBuffer:
     """Implements a circular buffer with maximum length.
@@ -51,6 +54,9 @@ class CircularBuffer:
         """
         return random.sample(self.buffer, n)
 
+    def __len__(self):
+        return len(self.buffer)
+
 
 class Agent:
     def __init__(self, name, input_dim, action_dim, max_replay=200000,
@@ -59,6 +65,9 @@ class Agent:
         # Replay memory is a circular buffer, and supervised learning memory is a reservoir.
         self.replay_memory = CircularBuffer(max_replay)
         self.supervised_memory = Reservoir(max_supervised)
+
+        self.input_dim = input_dim
+        self.action_dim = action_dim
 
         self.name = name
         with tf.variable_scope('agent_{}'.format(name)):
@@ -74,22 +83,20 @@ class Agent:
             self.update_ops = [t.assign(c) for t, c in zip(target_vars, current_vars)]
 
             # Set up Q-learning loss functions
-            self.predicted_next_q = tf.placeholder('float32', shape=[None, action_dim], name='predicted_next_q')
             self.reward = tf.placeholder('float32', shape=[None])
             self.action = tf.placeholder('int32', shape=[None])
             one_hot_action = tf.one_hot(self.action, action_dim)
 
-            with tf.variable_scope('current_q'):
-                q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
-                self.not_terminals = tf.placeholder('float32', shape=[None])
-                next_q = self.reward + self.not_terminals * tf.reduce_max(self.predicted_next_q, axis=1)
-                self.q_loss = tf.reduce_mean((next_q - q_value)**2)
-                self.q_trainer = tf.train.GradientDescentOptimizer(best_response_lr).minimize(self.q_loss)
+            q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
+            self.not_terminals = tf.placeholder('float32', shape=[None])
+            next_q = self.reward + self.not_terminals * tf.reduce_max(tf.stop_gradient(self.target_q_network['output']),
+                                                                      axis=1)
+            self.q_loss = tf.reduce_mean(tf.square(next_q - q_value))
+            self.q_trainer = tf.train.GradientDescentOptimizer(best_response_lr).minimize(self.q_loss)
 
-            with tf.variable_scope('policy'):
-                policy_for_actions = tf.reduce_sum(self.policy_network['output'] * one_hot_action, axis=1)
-                self.policy_loss = tf.reduce_mean(-tf.log(policy_for_actions))
-                self.policy_trainer = tf.train.GradientDescentOptimizer(supervised_lr).minimize(self.policy_loss)
+            policy_for_actions = tf.reduce_sum(self.policy_network['output'] * one_hot_action, axis=1)
+            self.policy_loss = tf.reduce_mean(-tf.log(policy_for_actions))
+            self.policy_trainer = tf.train.GradientDescentOptimizer(supervised_lr).minimize(self.policy_loss)
 
     def append_replay_memory(self, transitions):
         for transition in transitions:
@@ -101,12 +108,16 @@ class Agent:
 
     # Get the output of the q network for the given state
     def predict_q(self, sess, state):
+        assert len(state.shape) == 2
+        assert state.shape[1] == self.input_dim
         return sess.run(self.q_network['output'], feed_dict={
             self.q_network['input']: state
         })
 
     # Get the output of the q network for the given state
     def predict_policy(self, sess, state):
+        assert len(state.shape) == 2
+        assert state.shape[1] == self.input_dim
         return sess.run(self.policy_network['output'], feed_dict={
             self.policy_network['input']: state
         })
@@ -119,24 +130,20 @@ class Agent:
         # Sample a minibatch from the replay memory
         minibatch = self.replay_memory.sample(batch_size)
 
-        states = [d['state'] for d in minibatch]
-        actions = [d['action'] for d in minibatch]
-        next_states = [d['next_state'] for d in minibatch]
-        rewards = [d['reward'] for d in minibatch]
-        terminals = [d['terminal'] for d in minibatch]
+        states = np.array([d['state'] for d in minibatch])
+        actions = np.array([d['action'] for d in minibatch])
+        next_states = np.array([d['next_state'] for d in minibatch])
+        rewards = np.array([d['reward'] for d in minibatch])
+        terminals = np.array([d['terminal'] for d in minibatch])
 
-        not_terminals = [not t for t in terminals]
-
-        predicted_next_q = sess.run(self.target_q_network['output'], feed_dict={
-            self.target_q_network['input']: next_states
-        })
+        not_terminals = np.array([not t for t in terminals]).astype('float32')
 
         q_loss, _ = sess.run([self.q_loss, self.q_trainer], feed_dict={
             self.reward: rewards,
             self.action: actions,
-            self.predicted_next_q: predicted_next_q,
-            self.not_terminals: np.array(not_terminals).astype('float32').ravel(),
-            self.q_network['input']: states
+            self.not_terminals: not_terminals,
+            self.q_network['input']: states,
+            self.target_q_network['input']: next_states
         })
         return q_loss
 
@@ -144,8 +151,8 @@ class Agent:
         # Sample a minibatch from the supervised memory
         minibatch = self.supervised_memory.sample(batch_size)
 
-        states = [d['state'] for d in minibatch]
-        actions = [d['action'] for d in minibatch]
+        states = np.array([d['state'] for d in minibatch])
+        actions = np.array([d['action'] for d in minibatch])
 
         policy_loss, _ = sess.run([self.policy_loss, self.policy_trainer], feed_dict={
             self.policy_network['input']: states,
@@ -162,14 +169,9 @@ class Agent:
             hidden_layer = input_layer
 
             for i in range(num_hidden):
-                hidden_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=hidden_dim,
-                activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(),
-                biases_initializer=tf.zeros_initializer())
+                hidden_layer = tf.layers.dense(hidden_layer, hidden_dim, activation=tf.nn.relu)
 
-            output_layer = tf.contrib.layers.fully_connected(hidden_layer,
-                                                             num_outputs=action_dim,
-            weights_initializer=tf.contrib.layers.xavier_initializer(),
-            biases_initializer=tf.zeros_initializer())
+            output_layer = tf.layers.dense(hidden_layer, action_dim)
         return {'input': input_layer, 'output': output_layer}
 
     def create_policy_network(self, scope, input_dim, action_dim, num_hidden=2, hidden_dim=64):
@@ -178,14 +180,9 @@ class Agent:
 
             hidden_layer = input_layer
             for i in range(num_hidden):
-                hidden_layer = tf.contrib.layers.fully_connected(hidden_layer, num_outputs=hidden_dim,
-                activation_fn=tf.nn.relu, weights_initializer=tf.contrib.layers.xavier_initializer(),
-                biases_initializer=tf.zeros_initializer())
+                hidden_layer = tf.layers.dense(hidden_layer, hidden_dim, activation=tf.nn.relu)
 
-            output_layer = tf.contrib.layers.fully_connected(hidden_layer,
-                                                             num_outputs=action_dim,
-            activation_fn=tf.nn.softmax, weights_initializer=tf.contrib.layers.xavier_initializer(),
-            biases_initializer=tf.zeros_initializer())
+            output_layer = tf.layers.dense(hidden_layer, action_dim, activation=tf.nn.softmax)
         return {'input': input_layer, 'output': output_layer}
 
     def get_strategy(self, sess, states):
@@ -200,7 +197,7 @@ class Agent:
         """
         strategy = dict()
         for info_set_id, state in states.items():
-            policy = self.predict_policy(sess, [state]).ravel()
+            policy = self.predict_policy(sess, np.array([state])).ravel()
             strategy[info_set_id] = {i: policy[i] for i in range(len(policy))}
 
         return strategy

@@ -1,12 +1,15 @@
 # coding: utf-8
 
-import tensorflow as tf
+import argparse
+from time import gmtime, strftime
+import os
+
 import numpy as np
+import tensorflow as tf
+
 from rlpoker.games.leduc import LeducNFSP
 from rlpoker.games.card import get_deck
 from rlpoker.agent import Agent
-from time import time, gmtime, strftime
-import os
 
 
 def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
@@ -37,12 +40,13 @@ def create_summary_tensors():
 
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
-def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
+def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
          final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
          max_train_steps=10000000, batch_size=128,
-         steps_before_training=10000, q_learn_every=32,
-         policy_learn_every=32, verbose=False,
-         clip_reward=True, best_response_lr=0.1, supervised_lr=0.005):
+         steps_before_training=10000, q_learn_every=1,
+         policy_learn_every=1, verbose=False,
+         clip_reward=True, best_response_lr=1e-3, supervised_lr=1e-3,
+         train_players=(1, 2)):
 
     # Create two agents
     agents = {1: Agent('1', game.state_dim, game.action_dim,
@@ -81,11 +85,12 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
     # Collect rollouts from a game with the two agents.
     for train_step in range(max_train_steps):
         # Choose random player to start the game
-        first_player = np.random.choice([1,2])
+        first_player = np.random.choice([1, 2])
+        first_player = 1
         if verbose:
             print("First player: {}".format(first_player))
 
-        transitions = {1: [], 2:[]}
+        transitions = {1: [], 2: []}
         supervised = {1: [], 2: []}
         # Select the strategies
         strategy1 = np.random.choice(['q', 'policy'], p=[eta, 1.0-eta])
@@ -97,6 +102,8 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
 
         # Play one game
         next_player, state, available_actions, _, _ = game.reset(first_player)
+        if verbose:
+            print("Current node: {}".format(game._current_node))
         terminal = False
         player = next_player
         while not terminal:
@@ -113,7 +120,7 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
                 if np.random.random() < epsilon:
                     action = np.random.choice(available_actions)
                 else:
-                    q_values = agent.predict_q(sess, [state]).ravel()
+                    q_values = agent.predict_q(sess, np.array([state])).ravel()
                     for i in range(len(q_values)):
                         if i not in available_actions:
                             q_values[i] = -np.inf
@@ -121,12 +128,12 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
             else:
                 if verbose:
                     print("Playing with policy")
-                policy = agent.predict_policy(sess, [state])
-                policy = normalise_policy(policy.ravel(), available_actions)
+                policy = agent.predict_policy(sess, np.array([state])).ravel()
+                policy = normalise_policy(policy, available_actions)
 
                 # We first normalise the probabilities to the available
                 # actions.
-                action = np.random.choice([0,1,2], p=policy.ravel())
+                action = np.random.choice([0,1,2], p=policy)
             if verbose:
                 print("Takes action: {}".format(action))
             next_player, next_state, available_actions, rewards, terminal = \
@@ -134,6 +141,7 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
             if verbose:
                 print("Next player: {}".format(next_player))
                 print("Rewards: {}".format(rewards))
+                print("Current node: {}".format(game._current_node))
 
             # Add the transitions (ignoring reward and terminal for now,
             # since we will update this later).
@@ -152,11 +160,14 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
             player = next_player
             state = next_state
 
+        if verbose:
+            print("Terminal node: {}".format(game._current_node))
+
         # The game just ended, so the last frame was terminal. The game returns
         # rewards in the order: first player, second player, so we assign them
         # to the correct agents.
 
-        for player in [1,2]:
+        for player in [1, 2]:
             if len(transitions[player]) > 0:
                 if clip_reward:
                     reward = np.clip(rewards[player], -1.0, 1.0)
@@ -167,25 +178,24 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
             if verbose:
                 print("Adding transitions to player: {}".format(player))
                 print(transitions[player])
-            agents[player].append_replay_memory(transitions[player])
-            agents[player].append_supervised_memory(supervised[player])
+            if train_step < steps_before_training:
+                agents[player].append_replay_memory(transitions[player])
+                agents[player].append_supervised_memory(supervised[player])
 
         # Train the Q-networks
         if train_step >= steps_before_training:
             epsilon = compute_epsilon(initial_epsilon, final_epsilon,
                                       train_step - steps_before_training,
                                       epsilon_steps)
-            for player in [1,2]:
-                agent = agents[player]
+            for player, agent in agents.items():
+                if player not in train_players:
+                    continue
                 if train_step % q_learn_every == 0:
-                    for i in range(2):
-                        q_loss = agent.train_q_network(sess, batch_size)
-                        q_losses[player].append(q_loss)
+                    q_loss = agent.train_q_network(sess, batch_size)
+                    q_losses[player].append(q_loss)
                 if train_step % policy_learn_every == 0:
-                    for i in range(2):
-                        policy_loss = agent.train_policy_network(sess,
-                                                                 batch_size)
-                        policy_losses[player].append(policy_loss)
+                    policy_loss = agent.train_policy_network(sess, batch_size)
+                    policy_losses[player].append(policy_loss)
 
                 # Update the target networks
                 if train_step % update_target_q_every == 0:
@@ -220,6 +230,13 @@ def nfsp(game, update_target_q_every=5000, initial_epsilon=0.1,
                 })
                 tf_train_writer.add_summary(summary, train_step)
 
+                q_losses = {1: [], 2: []}
+                policy_losses = {1: [], 2: []}
+
+            for i in [1, 2]:
+                print("Player {}, buffer sizes: RL {}, SL {}".format(i, len(agents[i].replay_memory),
+                                                                     len(agents[i].supervised_memory)))
+
     return agents
 
 
@@ -235,5 +252,18 @@ def normalise_policy(policy, available_actions):
 
 
 if __name__ == '__main__':
-    cards = get_deck(3, 2)
-    nfsp(LeducNFSP(cards), verbose=False, eta=0.2)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose', action='store_true',
+                        help='If given, then prints verbose output.')
+    parser.add_argument('--num_values', type=int, default=3,
+                        help='The number of values in the deck of cards. Default is 3.')
+    parser.add_argument('--num_suits', type=int, default=2,
+                        help='The number of suits in the deck of cards. Default is 2.')
+    parser.add_argument('--clip_reward', action='store_true',
+                        help='If given, then clip rewards to -1, 1 range.')
+    parser.add_argument('--eta', type=float, default=0.1,
+                        help='The parameter eta as in the paper. Defaults to 0.1')
+    args = parser.parse_args()
+
+    cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
+    nfsp(LeducNFSP(cards), verbose=args.verbose, eta=args.eta, clip_reward=args.clip_reward)

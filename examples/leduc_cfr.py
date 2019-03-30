@@ -3,8 +3,9 @@ import argparse
 import bokeh.plotting as plt
 
 from rlpoker.cfr import cfr, save_strategy, load_strategy
-from games.leduc import Leduc
-from games.one_card_poker import OneCardPoker
+from rlpoker.games.leduc import Leduc
+from rlpoker.games.card import get_deck
+from rlpoker.games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
 
 
@@ -17,7 +18,7 @@ if __name__ == "__main__":
     parser.add_argument('--game', default='Leduc', type=str,
                         choices=games,
                         help='The game to run CFR on.')
-    parser.add_argument('--num_cards', default=3, type=int,
+    parser.add_argument('--num_values', default=3, type=int,
                         help='In OneCardPoker or Leduc, pass the number of '
                              'cards to use.')
     parser.add_argument('--num_suits', default=2, type=int,
@@ -30,19 +31,19 @@ if __name__ == "__main__":
     if args.game == 'Leduc':
         print("Solving Leduc Hold Em with {} iterations".format(
             args.num_iters))
-        cards = args.num_suits * tuple(10 + i for i in range(args.num_cards))
+        cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
         game = Leduc(cards)
 
     elif args.game == 'OneCardPoker':
         print("Solving One Card Poker")
-        game = OneCardPoker.create_game(args.num_cards)
+        game = OneCardPoker.create_game(args.num_values)
 
     strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
         use_chance_sampling=args.use_chance_sampling)
 
     # Save the strategy and plot the performance.
 
-    strategy_name = '{}.strategy'.format(args.game)
+    strategy_name = '{}_cfr.strategy'.format(args.game)
     print("Saving strategy at {}".format(strategy_name))
     save_strategy(strategy, strategy_name)
 
@@ -56,8 +57,6 @@ if __name__ == "__main__":
     times = [pair[0] for pair in exploitabilities]
     exploits = [pair[1] for pair in exploitabilities]
     p.line(times, exploits)
-
-    plt.show(p)
 
     print("Saved plot of exploitability at: {}".format(plot_name))
 

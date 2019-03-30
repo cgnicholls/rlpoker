@@ -319,7 +319,7 @@ class LeducNFSP(NFSPGame):
             state_vector = self._state_vectors[info_set_id]
         else:
             player = node.player
-            info_set_id = None
+            assert player == -1
             state_vector = np.zeros(self.state_dim)
 
         # Set up available actions as a one-hot vector.
