@@ -12,6 +12,7 @@ from rlpoker.games.leduc import LeducNFSP
 from rlpoker.games.card import get_deck
 from rlpoker.agent import Agent
 from rlpoker.best_response import compute_exploitability
+from rlpoker.util import TBSummariser
 
 
 def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
@@ -62,24 +63,6 @@ def build_transitions(states, actions, rewards):
     return transitions
 
 
-def create_summary_tensors():
-    # Create a dictionary of all summary nodes
-    summary_tensor = dict()
-    summary_tensor['q_loss_1'] = tf.placeholder('float32', ())
-    summary_tensor['q_loss_2'] = tf.placeholder('float32', ())
-    summary_tensor['policy_loss_1'] = tf.placeholder('float32', ())
-    summary_tensor['policy_loss_2'] = tf.placeholder('float32', ())
-    summary_tensor['exploitability_1'] = tf.placeholder('float32', ())
-    summary_tensor['exploitability_2'] = tf.placeholder('float32', ())
-    tf.summary.scalar('q_loss_1', summary_tensor['q_loss_1'])
-    tf.summary.scalar('q_loss_2', summary_tensor['q_loss_2'])
-    tf.summary.scalar('policy_loss_1', summary_tensor['policy_loss_1'])
-    tf.summary.scalar('policy_loss_2', summary_tensor['policy_loss_2'])
-    tf.summary.scalar('exploitability_1', summary_tensor['exploitability_1'])
-    tf.summary.scalar('exploitability_2', summary_tensor['exploitability_2'])
-    return summary_tensor
-
-
 # agents: a dictionary with keys 1, 2 and values the two agents.
 def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
          max_train_steps=10000000, batch_size=128, steps_before_training=10000, q_learn_every=1,
@@ -92,10 +75,8 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
                        best_response_lr=best_response_lr, supervised_lr=supervised_lr)}
 
     # Create summary tensors
-    summary_tensor = create_summary_tensors()
-
-    # Merge all summaries
-    merged = tf.summary.merge_all()
+    summary_names = ['q_loss_1', 'q_loss_2', 'policy_loss_1', 'policy_loss_2', 'exploitability_1', 'exploitability_2']
+    summariser = TBSummariser(summary_names)
 
     time_str = strftime("%Y-%m-%d-%H:%M:%S", gmtime())
     save_path = os.path.join('experiments', time_str)
@@ -111,7 +92,9 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
     # Create the session and initialise all variables
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    tf_train_writer = tf.summary.FileWriter(save_path, sess.graph)
+    tf_train_writer = tf.summary.FileWriter(save_path, graph=sess.graph)
+
+    print("Tensorboard events: {}".format(save_path))
 
     epsilon = initial_epsilon
 
@@ -272,15 +255,19 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
                     f.write("Epsilon: {}\n".format(epsilon))
                     f.write("-------------------\n")
 
-                summary = sess.run(merged, feed_dict={
-                    summary_tensor['q_loss_1']: np.mean(q_losses[1]),
-                    summary_tensor['q_loss_2']: np.mean(q_losses[2]),
-                    summary_tensor['policy_loss_1']: np.mean(policy_losses[1]),
-                    summary_tensor['policy_loss_2']: np.mean(policy_losses[2]),
-                    summary_tensor['exploitability_1']: exploit1,
-                    summary_tensor['exploitability_2']: exploit2
-                })
+                scalar_values = {
+                    'q_loss_1': np.mean(q_losses[1]),
+                    'q_loss_2': np.mean(q_losses[2]),
+                    'policy_loss_1': np.mean(policy_losses[1]),
+                    'policy_loss_2': np.mean(policy_losses[2]),
+                    'exploitability_1': exploit1,
+                    'exploitability_2': exploit2
+                }
+                print("Summarising")
+                print(scalar_values)
+                summary = summariser.summarise(sess, scalar_values)
                 tf_train_writer.add_summary(summary, train_step)
+                tf_train_writer.flush()
 
                 q_losses = {1: [], 2: []}
                 policy_losses = {1: [], 2: []}
