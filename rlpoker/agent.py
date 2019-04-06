@@ -75,7 +75,6 @@ class Agent:
         sess.run(self.update_ops)
 
     def train_q_network(self, sess, batch_size):
-        # import ipdb; ipdb.set_trace()
         # Sample a minibatch from the replay memory
         minibatch = self.replay_memory.sample(batch_size)
 

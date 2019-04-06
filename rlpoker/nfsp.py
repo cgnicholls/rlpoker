@@ -81,13 +81,9 @@ def create_summary_tensors():
 
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
-def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
-         final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
-         max_train_steps=10000000, batch_size=128,
-         steps_before_training=10000, q_learn_every=1,
-         policy_learn_every=1, verbose=False,
-         clip_reward=True, best_response_lr=1e-1, supervised_lr=5e-3,
-         train_players=(1, 2)):
+def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
+         max_train_steps=10000000, batch_size=128, steps_before_training=10000, q_learn_every=1,
+         policy_learn_every=1, clip_reward=True, best_response_lr=1e-1, supervised_lr=5e-3, train_players=(1, 2)):
 
     # Create two agents
     agents = {1: Agent('1', game.state_dim, game.action_dim,
@@ -108,6 +104,10 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
         print("Path doesn't exist, so creating: {}".format(save_path))
         os.makedirs(save_path)
 
+    log_file = os.path.join(save_path, 'nfsp.log')
+
+    print("Log file {}".format(log_file))
+
     # Create the session and initialise all variables
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -119,7 +119,9 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
     policy_losses = {1: [], 2: []}
 
     # Update the target network to start with
-    print("Updating target networks")
+    with open(log_file, 'a') as f:
+        f.write("Updating target networks\n")
+
     for agent in agents.values():
         agent.update_target_network(sess)
 
@@ -128,8 +130,8 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
         # Choose random player to start the game
         first_player = np.random.choice([1, 2])
         # first_player = 1
-        if verbose:
-            print("First player: {}".format(first_player))
+        with open(log_file, 'a') as f:
+            f.write("First player: {}\n".format(first_player))
 
         states = {1: [], 2: []}
         actions = {1: [], 2: []}
@@ -139,25 +141,25 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
         strategy2 = np.random.choice(['q', 'policy'], p=[eta, 1.0-eta])
         strategies = {1: strategy1, 2: strategy2}
 
-        if verbose:
-            print("Strategies: {}".format(strategies))
+        with open(log_file, 'a') as f:
+            f.write("Strategies: {}\n".format(strategies))
 
         # Play one game
         next_player, state, available_actions, _, _ = game.reset(first_player)
-        if verbose:
-            print("Current node: {}".format(game._current_node))
+        with open(log_file, 'a') as f:
+            f.write("Current node: {}\n".format(game._current_node))
         terminal = False
         player = next_player
         while not terminal:
-            if verbose:
-                print("Player: {}".format(player))
-                print("State: {}".format(state))
+            with open(log_file, 'a') as f:
+                f.write("Player: {}\n".format(player))
+                f.write("State: {}\n".format(state))
             agent = agents[player]
             strategy = strategies[player]
             # Sample the action from the corresponding policy
             if strategy == 'q':
-                if verbose:
-                    print("Playing with q")
+                with open(log_file, 'a') as f:
+                    f.write("Playing with q\n")
                 # Epsilon greedy strategy
                 if np.random.random() < epsilon:
                     action = np.random.choice(available_actions)
@@ -168,22 +170,24 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
                             q_values[i] = -np.inf
                     action = np.argmax(q_values)
             else:
-                if verbose:
-                    print("Playing with policy")
+                with open(log_file, 'a') as f:
+                    f.write("Playing with policy\n")
                 policy = agent.predict_policy(sess, np.array([state])).ravel()
                 policy = normalise_policy(policy, available_actions)
 
                 # We first normalise the probabilities to the available
                 # actions.
                 action = np.random.choice([0, 1, 2], p=policy)
-            if verbose:
-                print("Takes action: {}".format(action))
-            next_player, next_state, available_actions, rewards, terminal = \
-                game.step(action)
-            if verbose:
-                print("Next player: {}".format(next_player))
-                print("Rewards: {}".format(rewards))
-                print("Current node: {}".format(game._current_node))
+
+            with open(log_file, 'a') as f:
+                f.write("Takes action: {}\n".format(action))
+
+            next_player, next_state, available_actions, rewards, terminal = game.step(action)
+
+            with open(log_file, 'a') as f:
+                f.write("Next player: {}\n".format(next_player))
+                f.write("Rewards: {}\n".format(rewards))
+                f.write("Current node: {}\n".format(game._current_node))
 
             # Add the transitions (ignoring reward and terminal for now,
             # since we will update this later).
@@ -206,22 +210,24 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
         states[2].append(next_state)
 
         # Now build the transitions for each player from states, actions and rewards.
+        # TODO: should we clip rewards? Hard to converge to Nash equilibrium if so, as we are altering the utilities
+        # of the players.
         if clip_reward:
             rewards = {k: np.clip(v, -1.0, 1.0) for k, v in rewards.items()}
 
         transitions = build_transitions(states, actions, rewards)
 
-        if verbose:
-            print("Terminal node: {}".format(game._current_node))
+        with open(log_file, 'a') as f:
+            f.write("Terminal node: {}\n".format(game._current_node))
 
         # The game just ended, so the last frame was terminal. The game returns
         # rewards in the order: first player, second player, so we assign them
         # to the correct agents.
 
         for player in [1, 2]:
-            if verbose:
-                print("Adding transitions to player: {}".format(player))
-                print(transitions[player])
+            with open(log_file, 'a') as f:
+                f.write("Adding transitions to player: {}\n".format(player))
+                f.write(str(transitions[player]) + '\n')
             agents[player].append_replay_memory(transitions[player])
             agents[player].append_supervised_memory(supervised[player])
 
@@ -242,26 +248,29 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
 
                 # Update the target networks
                 if train_step % update_target_q_every == 0:
-                    if player == 1:
-                        print("Updating target networks")
+                    with open(log_file, 'a') as f:
+                        f.write("Updating target network of {}\n".format(player))
                     agent.update_target_network(sess)
 
         # Evaluate the best response network (the q network) for player 1
         # against player 2's average policy (the policy network), and vice
         # versa.
         if train_step % update_target_q_every == 0:
-            print("Train step: {}".format(train_step))
+            with open(log_file, 'a') as f:
+                f.write("Train step: {}\n".format(train_step))
             if train_step > steps_before_training:
                 exploit1 = compute_agent_exploitability(agents[1], sess, game)
                 exploit2 = compute_agent_exploitability(agents[2], sess, game)
-                print("Exploitabilities: {}, {}".format(exploit1, exploit2))
-                print("Q losses: {}, {}".format(np.mean(q_losses[1]),
-                                                np.mean(q_losses[2])))
-                print("Policy losses: {}, {}".format(
-                    np.mean(policy_losses[1]),
-                    np.mean(policy_losses[2])))
-                print("Epsilon: {}".format(epsilon))
-                print("-------------------")
+
+                with open(log_file, 'a') as f:
+                    f.write("Exploitabilities: {}, {}\n".format(exploit1, exploit2))
+                    f.write("Q losses: {}, {}\n".format(np.mean(q_losses[1]),
+                                                    np.mean(q_losses[2])))
+                    f.write("Policy losses: {}, {}\n".format(
+                        np.mean(policy_losses[1]),
+                        np.mean(policy_losses[2])))
+                    f.write("Epsilon: {}\n".format(epsilon))
+                    f.write("-------------------\n")
 
                 summary = sess.run(merged, feed_dict={
                     summary_tensor['q_loss_1']: np.mean(q_losses[1]),
@@ -276,9 +285,10 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1,
                 q_losses = {1: [], 2: []}
                 policy_losses = {1: [], 2: []}
 
-            for i in [1, 2]:
-                print("Player {}, buffer sizes: RL {}, SL {}".format(i, len(agents[i].replay_memory),
-                                                                     len(agents[i].supervised_memory)))
+            with open(log_file, 'a') as f:
+                for i in [1, 2]:
+                    f.write("Player {}, buffer sizes: RL {}, SL {}\n".format(i, len(agents[i].replay_memory),
+                                                                             len(agents[i].supervised_memory)))
 
     return agents
 
@@ -296,8 +306,6 @@ def normalise_policy(policy, available_actions):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--verbose', action='store_true',
-                        help='If given, then prints verbose output.')
     parser.add_argument('--num_values', type=int, default=3,
                         help='The number of values in the deck of cards. Default is 3.')
     parser.add_argument('--num_suits', type=int, default=2,
@@ -311,5 +319,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
-    nfsp(LeducNFSP(cards), verbose=args.verbose, eta=args.eta, clip_reward=args.clip_reward,
+    nfsp(LeducNFSP(cards), eta=args.eta, clip_reward=args.clip_reward,
          steps_before_training=args.steps_before_training)

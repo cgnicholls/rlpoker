@@ -1,6 +1,6 @@
 import argparse
 
-import bokeh.plotting as plt
+# import bokeh.plotting as plt
 
 from rlpoker.cfr import cfr, save_strategy, load_strategy
 from rlpoker.games.leduc import Leduc
@@ -50,13 +50,13 @@ if __name__ == "__main__":
     exploitability = compute_exploitability(game, strategy)
     print("Exploitability of saved strategy: {}".format(exploitability))
 
-    plot_name = '{}.html'.format(args.game)
-    plt.output_file(plot_name)
-    p = plt.figure(title='Exploitability for CFR trained on {}'.format(
-        args.game), x_axis_label='t', y_axis_label='Exploitability')
-    times = [pair[0] for pair in exploitabilities]
-    exploits = [pair[1] for pair in exploitabilities]
-    p.line(times, exploits)
-
-    print("Saved plot of exploitability at: {}".format(plot_name))
+    # plot_name = '{}.html'.format(args.game)
+    # plt.output_file(plot_name)
+    # p = plt.figure(title='Exploitability for CFR trained on {}'.format(
+    #     args.game), x_axis_label='t', y_axis_label='Exploitability')
+    # times = [pair[0] for pair in exploitabilities]
+    # exploits = [pair[1] for pair in exploitabilities]
+    # p.line(times, exploits)
+    #
+    # print("Saved plot of exploitability at: {}".format(plot_name))
 
