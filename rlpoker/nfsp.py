@@ -1,8 +1,10 @@
 # coding: utf-8
 
 import argparse
+from collections import namedtuple
 from time import gmtime, strftime
 import os
+import yaml
 
 import numpy as np
 import tensorflow as tf
@@ -10,10 +12,15 @@ import tensorflow as tf
 from rlpoker.nfsp_game import NFSPGame
 from rlpoker.games.leduc import LeducNFSP
 from rlpoker.games.card import get_deck
-from rlpoker.agent import Agent
+from rlpoker.agent import Agent, NetSizes
 from rlpoker.best_response import compute_exploitability
 from rlpoker.util import TBSummariser
 
+Hyperparameters = namedtuple('Hyperparameters',
+    ['max_replay', 'max_supervised', 'best_response_lr', 'supervised_lr',
+        'steps_before_training', 'eta', 'update_target_q_every',
+        'initial_epsilon', 'final_epsilon', 'epsilon_steps', 'batch_size',
+        'q_learn_every', 'policy_learn_every', 'clip_reward', 'net_sizes'])
 
 def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
     train_fraction = float(train_step) / float(epsilon_steps)
@@ -64,18 +71,19 @@ def build_transitions(states, actions, rewards):
 
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
-def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0, epsilon_steps=100000, eta=0.1,
-         max_train_steps=10000000, batch_size=128, steps_before_training=10000, q_learn_every=1,
-         policy_learn_every=1, clip_reward=True, best_response_lr=1e-1, supervised_lr=5e-3, train_players=(1, 2)):
+def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10000000):
 
     # Create two agents
     agents = {1: Agent('1', game.state_dim, game.action_dim,
-                       best_response_lr=best_response_lr, supervised_lr=supervised_lr),
+                       best_response_lr=hypers.best_response_lr, supervised_lr=hypers.supervised_lr,
+                       net_sizes=hypers.net_sizes, max_replay=hypers.max_replay, max_supervised=hypers.max_supervised),
               2: Agent('2', game.state_dim, game.action_dim,
-                       best_response_lr=best_response_lr, supervised_lr=supervised_lr)}
+                       best_response_lr=hypers.best_response_lr, supervised_lr=hypers.supervised_lr,
+                       net_sizes=hypers.net_sizes, max_replay=hypers.max_replay, max_supervised=hypers.max_supervised)}
 
     # Create summary tensors
-    summary_names = ['q_loss_1', 'q_loss_2', 'policy_loss_1', 'policy_loss_2', 'exploitability_1', 'exploitability_2']
+    summary_names = ['q_loss_1', 'q_loss_2', 'policy_loss_1', 'policy_loss_2', 'exploitability_1',
+            'exploitability_2', 'epsilon']
     summariser = TBSummariser(summary_names)
 
     time_str = strftime("%Y-%m-%d-%H:%M:%S", gmtime())
@@ -85,18 +93,30 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
         print("Path doesn't exist, so creating: {}".format(save_path))
         os.makedirs(save_path)
 
-    log_file = os.path.join(save_path, 'nfsp.log')
+    # Dump the hyperparameters
+    hypers_file = os.path.join(save_path, 'hypers.yaml')
+    with open(hypers_file, 'w') as f:
+        print("Saving hyperparameters to {}".format(hypers_file))
+        yaml.dump(hypers, f)
 
+    with open(hypers_file, 'r') as f:
+        hypers_check = yaml.load(f)
+        assert hypers == hypers_check
+
+    log_file = os.path.join(save_path, 'nfsp.log')
     print("Log file {}".format(log_file))
+
+    with open(log_file, 'a') as f:
+        f.write("Using hyperparameters: {}\n".format(hypers))
 
     # Create the session and initialise all variables
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
     tf_train_writer = tf.summary.FileWriter(save_path, graph=sess.graph)
 
-    print("Tensorboard events: {}".format(save_path))
+    print("To run tensorboard: tensorboard --logdir {}".format(os.path.join(os.getcwd(), save_path)))
 
-    epsilon = initial_epsilon
+    epsilon = hypers.initial_epsilon
 
     q_losses = {1: [], 2: []}
     policy_losses = {1: [], 2: []}
@@ -112,7 +132,6 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
     for train_step in range(max_train_steps):
         # Choose random player to start the game
         first_player = np.random.choice([1, 2])
-        # first_player = 1
         with open(log_file, 'a') as f:
             f.write("First player: {}\n".format(first_player))
 
@@ -120,8 +139,8 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
         actions = {1: [], 2: []}
         supervised = {1: [], 2: []}
         # Select the strategies
-        strategy1 = np.random.choice(['q', 'policy'], p=[eta, 1.0-eta])
-        strategy2 = np.random.choice(['q', 'policy'], p=[eta, 1.0-eta])
+        strategy1 = np.random.choice(['q', 'policy'], p=[hypers.eta, 1.0-hypers.eta])
+        strategy2 = np.random.choice(['q', 'policy'], p=[hypers.eta, 1.0-hypers.eta])
         strategies = {1: strategy1, 2: strategy2}
 
         with open(log_file, 'a') as f:
@@ -195,7 +214,7 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
         # Now build the transitions for each player from states, actions and rewards.
         # TODO: should we clip rewards? Hard to converge to Nash equilibrium if so, as we are altering the utilities
         # of the players.
-        if clip_reward:
+        if hypers.clip_reward:
             rewards = {k: np.clip(v, -1.0, 1.0) for k, v in rewards.items()}
 
         transitions = build_transitions(states, actions, rewards)
@@ -215,22 +234,22 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
             agents[player].append_supervised_memory(supervised[player])
 
         # Train the Q-networks
-        if train_step >= steps_before_training:
-            epsilon = compute_epsilon(initial_epsilon, final_epsilon,
-                                      train_step - steps_before_training,
-                                      epsilon_steps)
+        if train_step >= hypers.steps_before_training:
+            epsilon = compute_epsilon(hypers.initial_epsilon, hypers.final_epsilon,
+                                      train_step - hypers.steps_before_training,
+                                      hypers.epsilon_steps)
             for player, agent in agents.items():
                 if player not in train_players:
                     continue
-                if train_step % q_learn_every == 0:
-                    q_loss = agent.train_q_network(sess, batch_size)
+                if train_step % hypers.q_learn_every == 0:
+                    q_loss = agent.train_q_network(sess, hypers.batch_size)
                     q_losses[player].append(q_loss)
-                if train_step % policy_learn_every == 0:
-                    policy_loss = agent.train_policy_network(sess, batch_size)
+                if train_step % hypers.policy_learn_every == 0:
+                    policy_loss = agent.train_policy_network(sess, hypers.batch_size)
                     policy_losses[player].append(policy_loss)
 
                 # Update the target networks
-                if train_step % update_target_q_every == 0:
+                if train_step % hypers.update_target_q_every == 0:
                     with open(log_file, 'a') as f:
                         f.write("Updating target network of {}\n".format(player))
                     agent.update_target_network(sess)
@@ -238,10 +257,10 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
         # Evaluate the best response network (the q network) for player 1
         # against player 2's average policy (the policy network), and vice
         # versa.
-        if train_step % update_target_q_every == 0:
+        if train_step % hypers.update_target_q_every == 0:
             with open(log_file, 'a') as f:
                 f.write("Train step: {}\n".format(train_step))
-            if train_step > steps_before_training:
+            if train_step > hypers.steps_before_training:
                 exploit1 = compute_agent_exploitability(agents[1], sess, game)
                 exploit2 = compute_agent_exploitability(agents[2], sess, game)
 
@@ -261,7 +280,8 @@ def nfsp(game, update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0
                     'policy_loss_1': np.mean(policy_losses[1]),
                     'policy_loss_2': np.mean(policy_losses[2]),
                     'exploitability_1': exploit1,
-                    'exploitability_2': exploit2
+                    'exploitability_2': exploit2,
+                    'epsilon': epsilon
                 }
                 print("Summarising")
                 print(scalar_values)
@@ -305,6 +325,15 @@ if __name__ == '__main__':
                         help='Steps before training. Defaults to 10,000.')
     args = parser.parse_args()
 
+    hypers = Hyperparameters(max_replay=200000, max_supervised=1000000,
+            best_response_lr=1e-1, supervised_lr=5e-3,
+            steps_before_training=args.steps_before_training, eta=args.eta,
+            update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0,
+            epsilon_steps=100000, batch_size=128, q_learn_every=32,
+            policy_learn_every=32, clip_reward=args.clip_reward,
+            net_sizes=NetSizes(2, 64, 2, 64))
+
+    print("Using hyperparameters: {}".format(hypers))
+
     cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
-    nfsp(LeducNFSP(cards), eta=args.eta, clip_reward=args.clip_reward,
-         steps_before_training=args.steps_before_training)
+    nfsp(LeducNFSP(cards), hypers, max_train_steps=10000000)

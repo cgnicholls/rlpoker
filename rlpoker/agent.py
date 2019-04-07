@@ -1,15 +1,18 @@
 import tensorflow as tf
-from collections import deque
+from collections import deque, namedtuple
 import random
 import numpy as np
 
 from rlpoker.buffer import Reservoir, CircularBuffer
 
 
+NetSizes = namedtuple('NetSizes', ['num_q_hidden', 'q_dim', 'num_policy_hidden', 'policy_dim'])
+
+
 class Agent:
     def __init__(self, name, input_dim, action_dim, max_replay=200000,
-                 max_supervised=2000000, best_response_lr=1e-4,
-                 supervised_lr=1e-5):
+                 max_supervised=1000000, best_response_lr=0.1,
+                 supervised_lr=0.005, net_sizes=NetSizes(1, 64, 1, 64)):
         # Replay memory is a circular buffer, and supervised learning memory is a reservoir.
         self.replay_memory = CircularBuffer(max_replay)
         self.supervised_memory = Reservoir(max_supervised)
@@ -19,9 +22,16 @@ class Agent:
 
         self.name = name
         with tf.variable_scope('agent_{}'.format(name)):
-            self.q_network = self.create_q_network('current_q', input_dim, action_dim)
-            self.target_q_network = self.create_q_network('target_q', input_dim, action_dim)
-            self.policy_network = self.create_policy_network('policy', input_dim, action_dim)
+            self.q_network = self.create_q_network('current_q', input_dim,
+                    action_dim, num_hidden=net_sizes.num_q_hidden,
+                    hidden_dim=net_sizes.q_dim)
+            self.target_q_network = self.create_q_network('target_q',
+                    input_dim, action_dim, num_hidden=net_sizes.num_q_hidden,
+                    hidden_dim=net_sizes.q_dim)
+            self.policy_network = self.create_policy_network('policy',
+                    input_dim, action_dim,
+                    num_hidden=net_sizes.num_policy_hidden,
+                    hidden_dim=net_sizes.policy_dim)
 
             # Create ops for copying current network to target network. We create a list
             # of the variables in both networks and then create an assign operation that
@@ -110,7 +120,7 @@ class Agent:
 
     # Create a 2 layer neural network with relu activations on the hidden
     # layer. The output is the predicted q-value of an action.
-    def create_q_network(self, scope, input_dim, action_dim, num_hidden=2, hidden_dim=64):
+    def create_q_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder('float32', shape=[None, input_dim])
 
@@ -122,7 +132,7 @@ class Agent:
             output_layer = tf.layers.dense(hidden_layer, action_dim)
         return {'input': input_layer, 'output': output_layer}
 
-    def create_policy_network(self, scope, input_dim, action_dim, num_hidden=2, hidden_dim=64):
+    def create_policy_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder('float32', shape=[None, input_dim])
 
