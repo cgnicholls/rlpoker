@@ -31,6 +31,10 @@ def compute_epsilon(initial_epsilon, final_epsilon, train_step, epsilon_steps):
     return (1-train_fraction) * initial_epsilon + train_fraction * final_epsilon
 
 
+def compute_epsilon_sqrt_t(initial_epsilon, train_step, epsilon_steps):
+    return initial_epsilon / np.sqrt(max(1, train_step / epsilon_steps))
+
+
 def compute_agent_exploitability(agent: Agent, sess: tf.Session, game: NFSPGame):
     """Computes the exploitability of the agent's current strategy.
 
@@ -235,9 +239,7 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
 
         # Train the Q-networks
         if train_step >= hypers.steps_before_training:
-            epsilon = compute_epsilon(hypers.initial_epsilon, hypers.final_epsilon,
-                                      train_step - hypers.steps_before_training,
-                                      hypers.epsilon_steps)
+            epsilon = compute_epsilon_sqrt_t(hypers.initial_epsilon, train_step, hypers.epsilon_steps)
             for player, agent in agents.items():
                 if player not in train_players:
                     continue
@@ -311,6 +313,31 @@ def normalise_policy(policy, available_actions):
     return policy / np.sum(policy)
 
 
+def sample_hypers():
+    max_replay = int(np.random.choice([50000, 200000, 400000]))
+    max_supervised = int(np.random.choice([200000, 400000, 1000000, 2000000]))
+    best_response_lr = 10.0**(-5 + 5 * np.random.random())
+    supervised_lr = 10.0**(-5 + 5 * np.random.random())
+    steps_before_training = int(np.random.randint(1000, 100000))
+    eta = np.random.random() * 0.6
+    update_target_q_every = int(np.random.choice([200, 300, 1000]))
+    epsilon_steps = int(np.random.choice([10000, 50000, 100000]))
+    batch_size = int(np.random.choice([32, 64, 128, 256]))
+    learn_every = int(np.random.choice([1, 8, 32, 128]))
+    num_hidden = int(np.random.choice([1, 2]))
+    hidden_dim = int(np.random.choice([16, 32, 64, 128]))
+    hypers = Hyperparameters(max_replay=max_replay, max_supervised=max_supervised,
+            best_response_lr=best_response_lr, supervised_lr=supervised_lr,
+            steps_before_training=steps_before_training, eta=eta,
+            update_target_q_every=update_target_q_every, initial_epsilon=0.1,
+            final_epsilon=0.0, epsilon_steps=epsilon_steps, batch_size=batch_size,
+            q_learn_every=learn_every, policy_learn_every=learn_every,
+            clip_reward=False,
+            net_sizes=NetSizes(num_hidden, hidden_dim, num_hidden, hidden_dim))
+
+    return hypers
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_values', type=int, default=3,
@@ -323,17 +350,29 @@ if __name__ == '__main__':
                         help='The parameter eta as in the paper. Defaults to 0.1')
     parser.add_argument('--steps_before_training', type=int, default=10000,
                         help='Steps before training. Defaults to 10,000.')
+    parser.add_argument('--hyperopt', action='store_true',
+                        help='Run hyperparameter optimisation.')
+    parser.add_argument('--max_train_steps', type=int, default=10000000,
+                        help='The maximum number of training steps to run.')
     args = parser.parse_args()
 
-    hypers = Hyperparameters(max_replay=200000, max_supervised=1000000,
-            best_response_lr=1e-1, supervised_lr=5e-3,
-            steps_before_training=args.steps_before_training, eta=args.eta,
-            update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0,
-            epsilon_steps=100000, batch_size=128, q_learn_every=32,
-            policy_learn_every=32, clip_reward=args.clip_reward,
-            net_sizes=NetSizes(2, 64, 2, 64))
+    if args.hyperopt:
+        hypers_list = [sample_hypers() for i in range(100)]
+    else:
+        hypers = Hyperparameters(max_replay=200000, max_supervised=1000000,
+                best_response_lr=1e-2, supervised_lr=5e-3,
+                steps_before_training=args.steps_before_training, eta=args.eta,
+                update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0,
+                epsilon_steps=10000, batch_size=128, q_learn_every=1,
+                policy_learn_every=1, clip_reward=args.clip_reward,
+                net_sizes=NetSizes(2, 64, 2, 64))
+        hypers_list = [hypers]
 
-    print("Using hyperparameters: {}".format(hypers))
+    print("Using hyperparameters: {}".format(hypers_list))
+    print("Training for {} steps".format(args.max_train_steps))
 
-    cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
-    nfsp(LeducNFSP(cards), hypers, max_train_steps=10000000)
+    for hypers in hypers_list:
+        tf.reset_default_graph()
+        print("Using hyperparameters: {}".format(hypers))
+        cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
+        nfsp(LeducNFSP(cards), hypers, max_train_steps=args.max_train_steps)
