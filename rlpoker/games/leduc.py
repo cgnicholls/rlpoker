@@ -274,6 +274,16 @@ class Leduc(ExtensiveGame):
         else:
             return {1: 0, 2: 0}
 
+    def get_node_from_actions(self, action_list):
+        """Returns the node resulting from taking the given actions from the
+        root.
+        """
+        node = self.root
+        for action in action_list:
+            node = node.children[action]
+
+        return node
+
 
 class LeducNFSP(NFSPGame):
 
@@ -372,6 +382,23 @@ class LeducNFSP(NFSPGame):
         return self.summarise(self._current_node)
 
 
+def compute_betting_round_encoding(actions, max_raises):
+    """Computes a vector that encodes actions in a betting round. The encoding
+    is: [first call bit] + one hot encoding(max_raises + 1, num_raises) + [last call bit].
+    Here, first call bit is 1 if and only if the first action was a call, and last call bit is 1 if and only
+    if the last action was a call and there was more than one action. Otherwise, they are 0.
+    And the one hot encoding is of length max_raises and contains a 1 in the ith position if and only if there
+    were i raises in the round.
+    """
+    if len(actions) == 0:
+        return np.zeros(1 + max_raises + 1 + 1)
+
+    first_call = np.array([1]) if (actions[0] == 1) else np.array([0])
+    last_call = np.array([1]) if ((actions[-1] == 1) and (len(actions) > 1)) else np.array([0])
+    num_raises = Counter(actions)[2]
+    raise_encoding = one_hot_encoding(max_raises + 1, num_raises)
+    return np.concatenate([first_call, raise_encoding, last_call], axis=0)
+
 def compute_state_vectors(info_set_ids, card_indices, max_raises):
     """Computes a state vector for each information set id. This is a unique vector
     for each information set, which encodes the information set.
@@ -413,31 +440,8 @@ def compute_state_vectors(info_set_ids, card_indices, max_raises):
 
         actions1, actions2, current_round = compute_betting_rounds(info_set_id)
 
-        if current_round == 1:
-            num_raises1 = Counter(actions1)[2]
-            round1_vec = one_hot_encoding(max_raises + 1, num_raises1)
-            round1_vec = np.append(round1_vec, len(actions1) == 0)
-            first_is_call = 0
-            if len(actions1) > 0 and actions1[0] == 1:
-                first_is_call = 1
-            round1_vec = np.append(round1_vec, first_is_call)
-            round2_vec = np.zeros(max_raises + 3, dtype=float)
-        else:
-            num_raises1 = Counter(actions1)[2]
-            num_raises2 = Counter(actions2)[2]
-
-            round1_vec = one_hot_encoding(max_raises + 1, num_raises1)
-            round1_vec = np.append(round1_vec, len(actions1) == 0)
-            first_is_call = 0
-            if len(actions1) > 0 and actions1[0] == 1:
-                first_is_call = 1
-            round1_vec = np.append(round1_vec, first_is_call)
-            round2_vec = one_hot_encoding(max_raises + 1, num_raises2)
-            round2_vec = np.append(round2_vec, len(actions2) == 0)
-            first_is_call = 0
-            if len(actions2) > 0 and actions2[0] == 1:
-                first_is_call = 1
-            round2_vec = np.append(round2_vec, first_is_call)
+        round1_vec = compute_betting_round_encoding(actions1, max_raises)
+        round2_vec = compute_betting_round_encoding(actions2, max_raises)
 
         state_vectors[info_set_id] = np.concatenate(
             [player_vec, hole_vec, board_vec, round1_vec, round2_vec], axis=0)

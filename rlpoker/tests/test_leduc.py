@@ -4,7 +4,7 @@ from collections import Counter
 import numpy as np
 
 from rlpoker.games.leduc import (Leduc, compute_state_vectors,
-    compute_betting_rounds, LeducNFSP)
+    compute_betting_rounds, compute_betting_round_encoding, LeducNFSP)
 from rlpoker.games.card import Card
 
 def test_leduc():
@@ -125,7 +125,7 @@ def test_compute_state_vectors():
             np.array([1]),
             np.array([1, 0, 0]),
             np.array([0, 0, 0]),
-            np.array([0, 0, 1, 0, 1]),
+            np.array([1, 0, 0, 1, 0]),
             np.array([0, 0, 0, 0, 0])], axis=0).astype(float)
     ]
     computed = compute_state_vectors(info_set_ids, card_indices, max_raises=2)
@@ -156,3 +156,47 @@ def test_compute_state_vectors_unique():
         seen_vectors[t] = info_set_id
 
     # assert len(set(game.state_vectors.keys())) == len({tuple(v) for v in game.state_vectors.values()})
+
+
+def test_compute_betting_round_encoding():
+    max_raises = 4
+
+    computed = compute_betting_round_encoding([], max_raises)
+    expected = np.array([0, 0, 0, 0, 0, 0, 0]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1], max_raises)
+    expected = np.array([1, 1, 0, 0, 0, 0, 0]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1, 1], max_raises)
+    expected = np.array([1, 1, 0, 0, 0, 0, 1]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1, 2], max_raises)
+    expected = np.array([1, 0, 1, 0, 0, 0, 0]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1, 2, 1], max_raises)
+    expected = np.array([1, 0, 1, 0, 0, 0, 1]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([2, 2, 1], max_raises)
+    expected = np.array([0, 0, 0, 1, 0, 0, 1]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1, 2, 2, 1], max_raises)
+    expected = np.array([1, 0, 0, 1, 0, 0, 1]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1, 2, 2, 2], max_raises)
+    expected = np.array([1, 0, 0, 0, 1, 0, 0]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([2, 2, 2, 2], max_raises)
+    expected = np.array([0, 0, 0, 0, 0, 1, 0]).astype('float32')
+    np.testing.assert_allclose(computed, expected)
+
+    computed = compute_betting_round_encoding([1, 2, 2, 2, 2], max_raises)
+    expected = np.array([1, 0, 0, 0, 0, 1, 0]).astype('float32')
+    np.testing.assert_allclose(computed, expected)

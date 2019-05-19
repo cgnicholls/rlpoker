@@ -1,5 +1,3 @@
-# coding: utf-8
-
 import argparse
 from collections import namedtuple
 from time import gmtime, strftime
