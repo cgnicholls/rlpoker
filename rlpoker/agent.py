@@ -36,25 +36,32 @@ class Agent:
             # Create ops for copying current network to target network. We create a list
             # of the variables in both networks and then create an assign operation that
             # copies the value in the current variable to the corresponding target variable.
-            current_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_{}/current_q'.format(name))
-            target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent_{}/target_q'.format(name))
+            current_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                scope='agent_{}/current_q'.format(self.name))
+            target_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                scope='agent_{}/target_q'.format(self.name))
             self.update_ops = [t.assign(c) for t, c in zip(target_vars, current_vars)]
 
             # Set up Q-learning loss functions
-            self.reward = tf.placeholder('float32', shape=[None])
-            self.action = tf.placeholder('int32', shape=[None])
+            self.reward = tf.placeholder(tf.float32, shape=[None])
+            self.action = tf.placeholder(tf.int32, shape=[None])
             one_hot_action = tf.one_hot(self.action, action_dim)
 
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='agent_{}/current_q'.format(self.name))
+
             q_value = tf.reduce_sum(one_hot_action * self.q_network['output'], axis=1)
-            self.not_terminals = tf.placeholder('float32', shape=[None])
+            self.not_terminals = tf.placeholder(tf.float32, shape=[None])
             next_q = self.reward + self.not_terminals * tf.reduce_max(tf.stop_gradient(
                 self.target_q_network['output']), axis=1)
             self.q_loss = tf.reduce_mean(tf.square(next_q - q_value))
-            self.q_trainer = tf.train.GradientDescentOptimizer(best_response_lr).minimize(self.q_loss)
+            with tf.control_dependencies(update_ops):
+                self.q_trainer = tf.train.GradientDescentOptimizer(best_response_lr).minimize(self.q_loss)
 
             policy_for_actions = tf.reduce_sum(self.policy_network['output'] * one_hot_action, axis=1)
             self.policy_loss = tf.reduce_mean(-tf.log(policy_for_actions))
-            self.policy_trainer = tf.train.GradientDescentOptimizer(supervised_lr).minimize(self.policy_loss)
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='agent_{}/policy'.format(self.name))
+            with tf.control_dependencies(update_ops):
+                self.policy_trainer = tf.train.GradientDescentOptimizer(supervised_lr).minimize(self.policy_loss)
 
     def append_replay_memory(self, transitions):
         for transition in transitions:
@@ -122,26 +129,32 @@ class Agent:
     # layer. The output is the predicted q-value of an action.
     def create_q_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64):
         with tf.variable_scope(scope):
-            input_layer = tf.placeholder('float32', shape=[None, input_dim])
+            input_layer = tf.placeholder(tf.float32, shape=[None, input_dim], name='input')
+            training = tf.placeholder(tf.bool, name='training')
 
             hidden_layer = input_layer
 
             for i in range(num_hidden):
                 hidden_layer = tf.layers.dense(hidden_layer, hidden_dim, activation=tf.nn.relu)
+                hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
+                hidden_layer = tf.layers.batch_normalization(hidden_layer, axis=-1, training=training)
 
             output_layer = tf.layers.dense(hidden_layer, action_dim)
-        return {'input': input_layer, 'output': output_layer}
+        return {'input': input_layer, 'output': output_layer, 'training': training}
 
     def create_policy_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64):
         with tf.variable_scope(scope):
-            input_layer = tf.placeholder('float32', shape=[None, input_dim])
+            input_layer = tf.placeholder(tf.float32, shape=[None, input_dim])
+            training = tf.placeholder(tf.bool, name='training')
 
             hidden_layer = input_layer
             for i in range(num_hidden):
                 hidden_layer = tf.layers.dense(hidden_layer, hidden_dim, activation=tf.nn.relu)
+                hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
+                hidden_layer = tf.layers.batch_normalization(hidden_layer, axis=-1, training=training)
 
             output_layer = tf.layers.dense(hidden_layer, action_dim, activation=tf.nn.softmax)
-        return {'input': input_layer, 'output': output_layer}
+        return {'input': input_layer, 'output': output_layer, 'training': training}
 
     def get_strategy(self, sess, states):
         """Returns a strategy for an agent. This is a mapping from
