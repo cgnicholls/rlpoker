@@ -73,7 +73,7 @@ def build_transitions(states, actions, rewards):
 
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
-def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10000000):
+def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10000000, verbose=False):
 
     # Create two agents
     agents = {1: Agent('1', game.state_dim, game.action_dim,
@@ -124,8 +124,9 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
     policy_losses = {1: [], 2: []}
 
     # Update the target network to start with
-    with open(log_file, 'a') as f:
-        f.write("Updating target networks\n")
+    if verbose:
+        with open(log_file, 'a') as f:
+            f.write("Updating target networks\n")
 
     for agent in agents.values():
         agent.update_target_network(sess)
@@ -134,8 +135,9 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
     for train_step in range(max_train_steps):
         # Choose random player to start the game
         first_player = np.random.choice([1, 2])
-        with open(log_file, 'a') as f:
-            f.write("First player: {}\n".format(first_player))
+        if verbose:
+            with open(log_file, 'a') as f:
+                f.write("First player: {}\n".format(first_player))
 
         states = {1: [], 2: []}
         actions = {1: [], 2: []}
@@ -145,25 +147,29 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
         strategy2 = np.random.choice(['q', 'policy'], p=[hypers.eta, 1.0-hypers.eta])
         strategies = {1: strategy1, 2: strategy2}
 
-        with open(log_file, 'a') as f:
-            f.write("Strategies: {}\n".format(strategies))
+        if verbose:
+            with open(log_file, 'a') as f:
+                f.write("Strategies: {}\n".format(strategies))
 
         # Play one game
         next_player, state, available_actions, _, _ = game.reset(first_player)
-        with open(log_file, 'a') as f:
-            f.write("Current node: {}\n".format(game._current_node))
+        if verbose:
+            with open(log_file, 'a') as f:
+                f.write("Current node: {}\n".format(game._current_node))
         terminal = False
         player = next_player
         while not terminal:
-            with open(log_file, 'a') as f:
-                f.write("Player: {}\n".format(player))
-                f.write("State: {}\n".format(state))
+            if verbose:
+                with open(log_file, 'a') as f:
+                    f.write("Player: {}\n".format(player))
+                    f.write("State: {}\n".format(state))
             agent = agents[player]
             strategy = strategies[player]
             # Sample the action from the corresponding policy
             if strategy == 'q':
-                with open(log_file, 'a') as f:
-                    f.write("Playing with q\n")
+                if verbose:
+                    with open(log_file, 'a') as f:
+                        f.write("Playing with q\n")
                 # Epsilon greedy strategy
                 if np.random.random() < epsilon:
                     action = np.random.choice(available_actions)
@@ -174,8 +180,9 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
                             q_values[i] = -np.inf
                     action = np.argmax(q_values)
             else:
-                with open(log_file, 'a') as f:
-                    f.write("Playing with policy\n")
+                if verbose:
+                    with open(log_file, 'a') as f:
+                        f.write("Playing with policy\n")
                 policy = agent.predict_policy(sess, np.array([state])).ravel()
                 policy = normalise_policy(policy, available_actions)
 
@@ -183,15 +190,17 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
                 # actions.
                 action = np.random.choice([0, 1, 2], p=policy)
 
-            with open(log_file, 'a') as f:
-                f.write("Takes action: {}\n".format(action))
+            if verbose:
+                with open(log_file, 'a') as f:
+                    f.write("Takes action: {}\n".format(action))
 
             next_player, next_state, available_actions, rewards, terminal = game.step(action)
 
-            with open(log_file, 'a') as f:
-                f.write("Next player: {}\n".format(next_player))
-                f.write("Rewards: {}\n".format(rewards))
-                f.write("Current node: {}\n".format(game._current_node))
+            if verbose:
+                with open(log_file, 'a') as f:
+                    f.write("Next player: {}\n".format(next_player))
+                    f.write("Rewards: {}\n".format(rewards))
+                    f.write("Current node: {}\n".format(game._current_node))
 
             # Add the transitions (ignoring reward and terminal for now,
             # since we will update this later).
@@ -221,17 +230,19 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
 
         transitions = build_transitions(states, actions, rewards)
 
-        with open(log_file, 'a') as f:
-            f.write("Terminal node: {}\n".format(game._current_node))
+        if verbose:
+            with open(log_file, 'a') as f:
+                f.write("Terminal node: {}\n".format(game._current_node))
 
         # The game just ended, so the last frame was terminal. The game returns
         # rewards in the order: first player, second player, so we assign them
         # to the correct agents.
 
         for player in [1, 2]:
-            with open(log_file, 'a') as f:
-                f.write("Adding transitions to player: {}\n".format(player))
-                f.write(str(transitions[player]) + '\n')
+            if verbose:
+                with open(log_file, 'a') as f:
+                    f.write("Adding transitions to player: {}\n".format(player))
+                    f.write(str(transitions[player]) + '\n')
             agents[player].append_replay_memory(transitions[player])
             agents[player].append_supervised_memory(supervised[player])
 
@@ -250,8 +261,9 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
 
                 # Update the target networks
                 if train_step % hypers.update_target_q_every == 0:
-                    with open(log_file, 'a') as f:
-                        f.write("Updating target network of {}\n".format(player))
+                    if verbose:
+                        with open(log_file, 'a') as f:
+                            f.write("Updating target network of {}\n".format(player))
                     agent.update_target_network(sess)
 
         # Evaluate the best response network (the q network) for player 1
@@ -350,7 +362,7 @@ if __name__ == '__main__':
                         help='Steps before training. Defaults to 10,000.')
     parser.add_argument('--hyperopt', action='store_true',
                         help='Run hyperparameter optimisation.')
-    parser.add_argument('--max_train_steps', type=int, default=10000000,
+    parser.add_argument('--max_train_steps', type=int, default=2000000,
                         help='The maximum number of training steps to run.')
     args = parser.parse_args()
 
