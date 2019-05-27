@@ -76,7 +76,8 @@ class Agent:
         assert len(state.shape) == 2
         assert state.shape[1] == self.input_dim
         return sess.run(self.q_network['output'], feed_dict={
-            self.q_network['input']: state
+            self.q_network['input']: state,
+            self.q_network['training']: False
         })
 
     # Get the output of the q network for the given state
@@ -84,7 +85,8 @@ class Agent:
         assert len(state.shape) == 2
         assert state.shape[1] == self.input_dim
         return sess.run(self.policy_network['output'], feed_dict={
-            self.policy_network['input']: state
+            self.policy_network['input']: state,
+            self.policy_network['training']: False
         })
 
     def update_target_network(self, sess):
@@ -108,7 +110,9 @@ class Agent:
             self.action: actions,
             self.not_terminals: not_terminals,
             self.q_network['input']: states,
-            self.target_q_network['input']: next_states
+            self.target_q_network['input']: next_states,
+            self.q_network['training']: True,
+            self.target_q_network['training']: True
         })
         return q_loss
 
@@ -121,13 +125,14 @@ class Agent:
 
         policy_loss, _ = sess.run([self.policy_loss, self.policy_trainer], feed_dict={
             self.policy_network['input']: states,
-            self.action: actions
+            self.action: actions,
+            self.policy_network['training']: True
         })
         return policy_loss
 
     # Create a 2 layer neural network with relu activations on the hidden
     # layer. The output is the predicted q-value of an action.
-    def create_q_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64):
+    def create_q_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64, dropout_rate=None):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder(tf.float32, shape=[None, input_dim], name='input')
             training = tf.placeholder(tf.bool, name='training')
@@ -136,13 +141,15 @@ class Agent:
 
             for i in range(num_hidden):
                 hidden_layer = tf.layers.dense(hidden_layer, hidden_dim, activation=tf.nn.relu)
-                hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
+                if dropout_rate:
+                    hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
                 hidden_layer = tf.layers.batch_normalization(hidden_layer, axis=-1, training=training)
 
             output_layer = tf.layers.dense(hidden_layer, action_dim)
         return {'input': input_layer, 'output': output_layer, 'training': training}
 
-    def create_policy_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64):
+    def create_policy_network(self, scope, input_dim, action_dim, num_hidden=1, hidden_dim=64,
+            dropout_rate=None):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder(tf.float32, shape=[None, input_dim])
             training = tf.placeholder(tf.bool, name='training')
@@ -150,7 +157,8 @@ class Agent:
             hidden_layer = input_layer
             for i in range(num_hidden):
                 hidden_layer = tf.layers.dense(hidden_layer, hidden_dim, activation=tf.nn.relu)
-                hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
+                if dropout_rate:
+                    hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
                 hidden_layer = tf.layers.batch_normalization(hidden_layer, axis=-1, training=training)
 
             output_layer = tf.layers.dense(hidden_layer, action_dim, activation=tf.nn.softmax)

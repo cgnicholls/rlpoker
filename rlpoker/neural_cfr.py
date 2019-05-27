@@ -22,7 +22,8 @@ def build_network(input_dim, action_dim, layer_dims, dropout_rate=0.3):
         hidden_layer = input_layer
         for i, layer_dim in enumerate(layer_dims):
             hidden_layer = tf.layers.dense(hidden_layer, layer_dim, activation=tf.nn.relu)
-            hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
+            if dropout_rate:
+                hidden_layer = tf.layers.dropout(hidden_layer, dropout_rate, training=training)
             hidden_layer = tf.layers.batch_normalization(hidden_layer, axis=-1, training=training)
 
         logits = tf.layers.dense(hidden_layer, action_dim, activation=None)
@@ -57,9 +58,17 @@ if __name__ == "__main__":
                         help='The number of suits to use in Leduc.')
     parser.add_argument('--use_chance_sampling', action='store_true',
                         help='Whether or not to use chance sampling. Defaults to False.')
-    parser.add_argument('--num_epochs', default=1000,
+    parser.add_argument('--num_epochs', default=10000,
                         help='The number of epochs to train the neural network for.')
+    parser.add_argument('--learning_rate', default=1e-4,
+                        help='The number of epochs to train the neural network for.')
+    parser.add_argument('--dropout_rate', default=None,
+                        help='The dropout rate to use.')
     args = parser.parse_args()
+
+    dropout_rate = None
+    if args.dropout_rate:
+        dropout_rate = float(args.dropout_rate)
 
     cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
     game = Leduc(cards)
@@ -76,8 +85,8 @@ if __name__ == "__main__":
     action_dim = leduc_nfsp.action_dim
 
     # Now build a network.
-    layer_dims = [64, 64]
-    network = build_network(state_dim, action_dim, layer_dims)
+    layer_dims = [64, 64, 64]
+    network = build_network(state_dim, action_dim, layer_dims, dropout_rate=dropout_rate)
 
     states = list(strategy.keys())
     xs = np.array([state_vectors[state] for state in states])
@@ -92,7 +101,7 @@ if __name__ == "__main__":
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
-        train_op = tf.train.AdamOptimizer(1e-3).minimize(loss)
+        train_op = tf.train.AdamOptimizer(args.learning_rate).minimize(loss)
 
     batch_size = 32
 
@@ -124,7 +133,7 @@ if __name__ == "__main__":
 
             index += batch_size
 
-        if i_epoch % 10 == 0:
+        if i_epoch % 100 == 0:
             print("End of epoch: {}, mean loss: {}".format(i_epoch, np.mean(losses)))
             network_strategy = compute_network_strategy(sess, network, state_vectors)
             network_exploitability = compute_exploitability(game, network_strategy)
