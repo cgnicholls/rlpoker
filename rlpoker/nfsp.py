@@ -512,7 +512,7 @@ if __name__ == '__main__':
                 update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0,
                 epsilon_steps=10000, batch_size=128, q_learn_every=1,
                 policy_learn_every=1, clip_reward=args.clip_reward,
-                net_sizes=NetSizes(2, 64, 2, 64))
+                net_sizes=NetSizes(3, 64, 3, 64))
         hypers_list = [hypers]
         run_nfsp(hypers_list)
 
