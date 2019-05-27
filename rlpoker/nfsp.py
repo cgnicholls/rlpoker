@@ -438,23 +438,15 @@ class LearningRateSetup(BayesOptSetup):
         ]
 
 
-def run_bayesian_optimisation(num_iters, nfsp_train_iters, bayes_opt_setup, bayes_opt_results=None):
-    """Runs Bayesian optimisation on NFSP with initial results.
+def run_bayesian_optimisation(num_iters, objective, bayes_opt_setup, bayes_opt_results=None):
+    """Runs Bayesian optimisation on the objective with initial results.
 
     Args:
         num_iters: the number of iterations to run Bayesian optimisation for.
-        nfsp_train_iters: the number of iterations to train NFSP on each run.
         bayes_opt_setup: instance of BayesOptSetup.
         bayes_opt_results: instance of BayesOptResults, or None.
     """
     # We first have to run NFSP to get some sample points.
-
-    # For now, we replace NFSP with a function to minimise.
-    def objective(hypers):
-        x = hypers.best_response_lr
-        y = hypers.supervised_lr
-        return x + (x - y)**2
-
     if bayes_opt_results is None:
         bayes_opt_results = BayesOptResults()
 
@@ -504,7 +496,15 @@ if __name__ == '__main__':
         run_nfsp(hypers_list)
     elif args.bayes_opt:
         bayes_opt_setup = LearningRateSetup()
-        run_bayesian_optimisation(100, 1000, bayes_opt_setup)
+        def objective(hypers):
+            tf.reset_default_graph()
+            cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
+            _, exploitabilities = nfsp(LeducNFSP(cards), hypers, max_train_steps=args.max_train_steps)
+            val = max(exploitabilities.values())
+            print("OBJECTIVE. Exploitabilities: {}, Value: {}".format(exploitabilities, val))
+            return val
+
+        run_bayesian_optimisation(100, objective, bayes_opt_setup)
     else:
         hypers = Hyperparameters(max_replay=200000, max_supervised=1000000,
                 best_response_lr=1e-2, supervised_lr=5e-3,
