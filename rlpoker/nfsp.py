@@ -7,6 +7,8 @@ import yaml
 import numpy as np
 import tensorflow as tf
 
+from GPyOpt.methods import BayesianOptimization
+
 from rlpoker.nfsp_game import NFSPGame
 from rlpoker.games.leduc import LeducNFSP
 from rlpoker.games.card import get_deck
@@ -309,7 +311,10 @@ def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10
                     f.write("Player {}, buffer sizes: RL {}, SL {}\n".format(i, len(agents[i].replay_memory),
                                                                              len(agents[i].supervised_memory)))
 
-    return agents
+    exploit1 = compute_agent_exploitability(agents[1], sess, game)
+    exploit2 = compute_agent_exploitability(agents[2], sess, game)
+    exploitabilities = {'1': exploit1, '2': exploit2}
+    return agents, exploitabilities
 
 
 def normalise_policy(policy, available_actions):
@@ -348,6 +353,132 @@ def sample_hypers():
     return hypers
 
 
+def run_nfsp(hypers_list):
+    exploitabilities_list = []
+    for i, hypers in enumerate(hypers_list):
+        print("NFSP run {}".format(i))
+        print("Using hyperparameters: {}".format(hypers))
+        print("Training for {} steps".format(args.max_train_steps))
+        tf.reset_default_graph()
+        cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
+        _, exploitabilities = nfsp(LeducNFSP(cards), hypers, max_train_steps=args.max_train_steps)
+        exploitabilities_list.append(exploitabilities)
+
+    return hypers_list, exploitabilities_list
+
+
+def propose_hypers(bayes_opt_results, bayes_opt_setup):
+    """Proposes hyperparameters given the current results.
+
+    Args:
+        results: instance of BayesOptResults.
+        bayes_opt_setup: instance of BayesOptSetup
+    Returns:
+        x: the proposed point.
+    """
+    bayes_opt = BayesianOptimization(f=None, domain=bayes_opt_setup.domain(),
+                                     X=bayes_opt_results.xs, Y=bayes_opt_results.ys)
+    proposed_x = bayes_opt.suggest_next_locations()
+
+    return proposed_x, bayes_opt
+
+
+class BayesOptResults:
+    def __init__(self):
+        self.xs_list = []
+        self.ys_list = []
+
+    def append(self, x, y):
+        assert len(np.shape(x)) == 1
+        self.xs_list.append(x)
+        self.ys_list.append(y)
+
+    @property
+    def xs(self):
+        return np.vstack(self.xs_list)
+
+    @property
+    def ys(self):
+        return np.array(self.ys_list).reshape(-1, 1)
+
+    def __len__(self):
+        return len(self.xs_list)
+
+
+class BayesOptSetup:
+    def x_to_hypers(self, x):
+        """Defines the map from the x that Bayesian Optimisation sees to the hyperparameters we pass to NFSP.
+        """
+        pass
+
+    def domain(self):
+        """Returns the domain that we pass to BayesianOptimization.
+        """
+        pass
+
+
+class LearningRateSetup(BayesOptSetup):
+    def x_to_hypers(self, x):
+        assert np.shape(x) == (2,)
+        x = x.ravel()
+        br_lr = 10.0**x[0]
+        sl_lr = 10.0**x[1]
+        return Hyperparameters(max_replay=200000, max_supervised=1000000,
+                best_response_lr=br_lr, supervised_lr=sl_lr,
+                steps_before_training=args.steps_before_training, eta=args.eta,
+                update_target_q_every=300, initial_epsilon=0.1, final_epsilon=0.0,
+                epsilon_steps=10000, batch_size=128, q_learn_every=1,
+                policy_learn_every=1, clip_reward=args.clip_reward,
+                net_sizes=NetSizes(2, 64, 2, 64))
+
+    def domain(self):
+        return [
+            {'name': 'log_br_lr', 'type': 'continuous', 'domain': (-5, 0)},
+            {'name': 'log_sl_lr', 'type': 'continuous', 'domain': (-5, 0)}
+        ]
+
+
+def run_bayesian_optimisation(num_iters, nfsp_train_iters, bayes_opt_setup, bayes_opt_results=None):
+    """Runs Bayesian optimisation on NFSP with initial results.
+
+    Args:
+        num_iters: the number of iterations to run Bayesian optimisation for.
+        nfsp_train_iters: the number of iterations to train NFSP on each run.
+        bayes_opt_setup: instance of BayesOptSetup.
+        bayes_opt_results: instance of BayesOptResults, or None.
+    """
+    # We first have to run NFSP to get some sample points.
+
+    # For now, we replace NFSP with a function to minimise.
+    def objective(hypers):
+        x = hypers.best_response_lr
+        y = hypers.supervised_lr
+        return x + (x - y)**2
+
+    if bayes_opt_results is None:
+        bayes_opt_results = BayesOptResults()
+
+    while len(bayes_opt_results) < 1:
+        hypers = sample_hypers()
+        x = np.array([hypers.best_response_lr, hypers.supervised_lr])
+        y = objective(hypers)
+        bayes_opt_results.append(x, y)
+
+    for i in range(num_iters):
+        x, bayes_opt = propose_hypers(bayes_opt_results, bayes_opt_setup)
+        x = x.ravel()
+        hypers = bayes_opt_setup.x_to_hypers(x)
+        y = objective(hypers)
+        bayes_opt_results.append(x, y)
+
+        print("x: {}, y: {}".format(x, y))
+
+        if i % 5 == 0:
+            bayes_opt.plot_acquisition()
+
+    return bayes_opt_results
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_values', type=int, default=3,
@@ -360,14 +491,20 @@ if __name__ == '__main__':
                         help='The parameter eta as in the paper. Defaults to 0.1')
     parser.add_argument('--steps_before_training', type=int, default=10000,
                         help='Steps before training. Defaults to 10,000.')
-    parser.add_argument('--hyperopt', action='store_true',
-                        help='Run hyperparameter optimisation.')
+    parser.add_argument('--random_search', action='store_true',
+                        help='Run hyperparameter optimisation using random search.')
+    parser.add_argument('--bayes_opt', action='store_true',
+                        help='Run hyperparameter optimisation using Bayesian optimisation.')
     parser.add_argument('--max_train_steps', type=int, default=2000000,
                         help='The maximum number of training steps to run.')
     args = parser.parse_args()
 
-    if args.hyperopt:
+    if args.random_search:
         hypers_list = [sample_hypers() for i in range(100)]
+        run_nfsp(hypers_list)
+    elif args.bayes_opt:
+        bayes_opt_setup = LearningRateSetup()
+        run_bayesian_optimisation(100, 1000, bayes_opt_setup)
     else:
         hypers = Hyperparameters(max_replay=200000, max_supervised=1000000,
                 best_response_lr=1e-2, supervised_lr=5e-3,
@@ -377,12 +514,5 @@ if __name__ == '__main__':
                 policy_learn_every=1, clip_reward=args.clip_reward,
                 net_sizes=NetSizes(2, 64, 2, 64))
         hypers_list = [hypers]
+        run_nfsp(hypers_list)
 
-    print("Using hyperparameters: {}".format(hypers_list))
-    print("Training for {} steps".format(args.max_train_steps))
-
-    for hypers in hypers_list:
-        tf.reset_default_graph()
-        print("Using hyperparameters: {}".format(hypers))
-        cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
-        nfsp(LeducNFSP(cards), hypers, max_train_steps=args.max_train_steps)
