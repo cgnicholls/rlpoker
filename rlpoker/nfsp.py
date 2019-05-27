@@ -76,6 +76,7 @@ def build_transitions(states, actions, rewards):
 
 # agents: a dictionary with keys 1, 2 and values the two agents.
 def nfsp(game, hypers: Hyperparameters, train_players=(1, 2), max_train_steps=10000000, verbose=False):
+    print("Running NFSP with hypers: {}".format(hypers))
 
     # Create two agents
     agents = {1: Agent('1', game.state_dim, game.action_dim,
@@ -421,8 +422,8 @@ class LearningRateSetup(BayesOptSetup):
     def x_to_hypers(self, x):
         assert np.shape(x) == (2,)
         x = x.ravel()
-        br_lr = 10.0**x[0]
-        sl_lr = 10.0**x[1]
+        br_lr = float(10.0**x[0])
+        sl_lr = float(10.0**x[1])
         return Hyperparameters(max_replay=200000, max_supervised=1000000,
                 best_response_lr=br_lr, supervised_lr=sl_lr,
                 steps_before_training=args.steps_before_training, eta=args.eta,
@@ -451,22 +452,23 @@ def run_bayesian_optimisation(num_iters, objective, bayes_opt_setup, bayes_opt_r
         bayes_opt_results = BayesOptResults()
 
     while len(bayes_opt_results) < 1:
+        print("Running NFSP once to get a result before doing Bayesian Optimisation.")
         hypers = sample_hypers()
         x = np.array([hypers.best_response_lr, hypers.supervised_lr])
         y = objective(hypers)
         bayes_opt_results.append(x, y)
 
     for i in range(num_iters):
+        print("BAYESIAN OPTIMISATION, iteration {}".format(i))
         x, bayes_opt = propose_hypers(bayes_opt_results, bayes_opt_setup)
         x = x.ravel()
         hypers = bayes_opt_setup.x_to_hypers(x)
+
+        print("Proposed hyperparameters: {}".format(hypers))
+        print("Proposed x: {}".format(x))
         y = objective(hypers)
+        print("Objective result: {}".format(y))
         bayes_opt_results.append(x, y)
-
-        print("x: {}, y: {}".format(x, y))
-
-        if i % 5 == 0:
-            bayes_opt.plot_acquisition()
 
     return bayes_opt_results
 
