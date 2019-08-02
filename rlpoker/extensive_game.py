@@ -1,8 +1,173 @@
 # coding: utf-8
 
 import abc
+import typing
 
 import numpy as np
+
+
+class ActionFloat:
+    """
+    ActionFloat stores a float for each action.
+    """
+
+    @staticmethod
+    def initialise_zero(actions: typing.List[typing.Any]):
+        """
+        Returns an ActionFloat containing zero for all actions.
+
+        Args:
+            actions: list of actions.
+
+        Returns:
+            ActionFloat.
+        """
+        return ActionFloat({action: 0.0 for action in actions})
+
+    @staticmethod
+    def initialise_uniform(actions: typing.List[typing.Any]):
+        """
+        Returns an ActionFloat containing 1/len(actions) for each action. This is a uniform probability
+        distribution over the actions.
+
+        Args:
+            actions: list of actions.
+
+        Returns:
+            ActionFloat.
+        """
+        return ActionFloat({action: 1.0 / len(actions) for action in actions})
+
+    def __init__(self, action_floats: typing.Dict[typing.Any, float]):
+        self.action_floats = action_floats
+
+    def add(self, action: typing.Any, value: float):
+        """
+        Adds the value to the current value for the action.
+
+        If the action isn't already in the dictionary, it is added with initial value 0.
+
+        Args:
+            action: typing.Any. The action to add regret to.
+            value: float. The value to add.
+
+        Returns:
+            None
+        """
+        if action not in self.action_floats:
+            self.action_floats[action] = 0.0
+        self.action_floats[action] += value
+
+    def action_list(self):
+        """
+        Returns: list of the actions.
+        """
+        return list(self.action_floats.keys())
+
+    def __getitem__(self, action):
+        return self.action_floats[action]
+
+    def __setitem__(self, action, regret):
+        self.action_floats[action] = regret
+
+    def items(self):
+        for k, v in self.action_floats.items():
+            yield k, v
+
+    def keys(self):
+        for k in self.action_floats.keys():
+            yield k
+
+    def __eq__(self, other):
+        if not isinstance(other, ActionFloat):
+            return False
+        return self.action_floats == other.action_floats
+
+    def __str__(self):
+        return "ActionFloat({})".format(self.action_floats)
+
+    def __len__(self):
+        return len(self.action_floats)
+
+    def copy(self):
+        return ActionFloat(self.action_floats.copy())
+
+
+class Strategy:
+    """
+    A Strategy is a dictionary mapping information sets to ActionProbabilities in those information sets. The
+    ActionProbabilities should only contain the valid actions in the information set.
+    """
+
+    @staticmethod
+    def initialise():
+        """
+        Initialise an empty strategy.
+
+        Returns:
+            Strategy. Empty strategy.
+        """
+        return Strategy(dict())
+
+    def __init__(self, strategy: typing.Dict[typing.Any, ActionFloat]):
+        self.strategy = strategy
+
+    def set_uniform_action_probs(self, info_set: typing.Any, available_actions: typing.List[typing.Any]):
+        assert info_set not in self.strategy, "Info set {} already exists".format(info_set)
+        self.strategy[info_set] = ActionFloat.initialise_uniform(available_actions)
+
+    def __getitem__(self, item):
+        return self.strategy[item]
+
+    def __setitem__(self, key, value):
+        self.strategy[key] = value
+
+    def get_action_probs(self, info_set):
+        return self.strategy[info_set]
+
+    def get_info_sets(self):
+        return list(self.strategy.keys())
+
+    def copy(self):
+        return Strategy(
+            {
+                k: v.copy() for k, v in self.strategy.items()
+            }
+        )
+
+    def __str__(self):
+        lines = []
+        for info_set, action_probs in self.strategy.items():
+            lines += ["Info set: {}, Action probs: {}".format(info_set, action_probs)]
+        return "Strategy({})".format("\n".join(lines))
+
+
+class ActionIndexer:
+    """
+    An ActionIndexer maps possible actions in a game to indices, so we can use neural networks and map between
+    actions and action indices.
+    """
+
+    def __init__(self, actions: typing.List[typing.Any]):
+        assert len(set(actions)) == len(actions), "Actions must be unique."
+
+        self.actions = actions
+        self.action_indices = dict(zip(actions, range(len(actions))))
+
+    def get_index(self, action):
+        return self.action_indices[action]
+
+    def get_action(self, index):
+        return self.actions[index]
+
+    def get_action_dim(self):
+        return len(self.actions)
+
+
+class InformationSetAdvantages(typing.NamedTuple):
+    info_set: typing.Any
+    time: int
+    advantages: typing.Dict[typing.Any, float]
 
 
 class ExtensiveGameNode:
@@ -128,13 +293,11 @@ class ExtensiveGame:
                 info_set_ids[k] = v
         return info_set_ids
 
-    def expected_value(self, strategy_1, strategy_2, num_iters):
-        """ Given a strategy for player 1 and a strategy for player 2, compute
+    def expected_value(self, strategy_1: Strategy, strategy_2: Strategy, num_iters: int):
+        """Given a strategy for player 1 and a strategy for player 2, compute
         the expected value for player 1.
-        - strategy_1: should be a dictionary from information set identifiers
-          for player 1 for all of player 1's nodes to probabilities over actions
-              available in that information set.
-        - strategy_2: same for player 2.
+        - strategy_1: Strategy.
+        - strategy_2: Strategy.
         Returns the result of each game of strategy_1 versus strategy_2.
         """
         results = []
@@ -177,7 +340,7 @@ class ExtensiveGame:
 
         return results
 
-    def complete_strategy_uniformly(self, strategy):
+    def complete_strategy_uniformly(self, strategy: Strategy):
         """ Given a partial strategy, i.e. a dictionary from a subset of the
         info_set_ids to probabilities over actions in those information sets,
         complete the dictionary by assigning uniform probability distributions
@@ -195,7 +358,7 @@ class ExtensiveGame:
             print("Completed strategy at {} information sets.".format(num_missing))
         return new_strategy
 
-    def is_strategy_complete(self, strategy):
+    def is_strategy_complete(self, strategy: Strategy):
         """Returns whether or not the strategy contains probabilities for
         each information set.
         """

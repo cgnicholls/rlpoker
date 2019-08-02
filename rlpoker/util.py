@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+import numpy as np
+
 
 class TBSummariser:
 
@@ -15,3 +17,20 @@ class TBSummariser:
             self.placeholders[name]: scalar_values[name] for name in self.placeholders
         }
         return sess.run(self.merged, feed_dict=feed_dict)
+
+
+def sample_action(strategy):
+    """Samples an action from the given strategy.
+
+    Args:
+        strategy: dict with keys the actions and values the probability of taking the action.
+
+    Returns:
+        action.
+    """
+    actions = [a for a in strategy]
+    probs = [strategy[a] for a in actions]
+
+    return np.random.choice(actions, p=probs)
+
+

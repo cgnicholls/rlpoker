@@ -36,7 +36,6 @@ class Leduc(ExtensiveGame):
         # Initialise the super class.
         super().__init__(root)
 
-
     @staticmethod
     def create_tree(cards, max_raises, raise_amount):
         # Create the root node.

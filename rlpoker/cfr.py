@@ -3,11 +3,38 @@
 # player game.
 
 import pickle
+import typing
+
 import numpy as np
 
 from rlpoker import best_response
 from rlpoker.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
+from rlpoker.extensive_game import ActionFloat, Strategy
+
+
+def compute_regret_matching(action_regrets: ActionFloat):
+    """Given regrets r_i for actions a_i, we compute the regret matching strategy as follows.
+
+    If sum_i max(0, r_i) > 0:
+        Play action a_i proportionally to max(0, r_i)
+    Else:
+        Play all actions uniformly.
+
+    Args:
+        regrets: dict
+
+    Returns:
+        ActionFloat. The probability of taking each action in this information set.
+    """
+    # If no regrets are positive, just return the uniform probability distribution on available actions.
+    if max([v for k, v in action_regrets.items()]) <= 0.0:
+        return ActionFloat.initialise_uniform(action_regrets.action_list())
+    else:
+        # Otherwise take the positive part of each regret (i.e. the maximum of the regret and zero),
+        # and play actions with probability proportional to positive regret.
+        denominator = sum([max(0.0, v) for k, v in action_regrets.items()])
+        return ActionFloat({k: max(0.0, v) / denominator for k, v in action_regrets.items()})
 
 
 def cfr(game, num_iters=10000, use_chance_sampling=True):
@@ -23,8 +50,8 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 
     # Strategy_t holds the strategy at time t; similarly strategy_t_1 holds the
     # strategy at time t + 1.
-    strategy_t = dict()
-    strategy_t_1 = dict()
+    strategy_t = Strategy.initialise()
+    strategy_t_1 = Strategy.initialise()
 
     average_strategy = None
     exploitabilities = []
@@ -69,8 +96,15 @@ def compute_average_strategy(action_counts):
     return average_strategy
 
 
-def compare_strategies(s1, s2):
-    """ Takes the average Euclidean distance between the probability distributions.
+def compare_strategies(s1: Strategy, s2: Strategy):
+    """Returns the average Euclidean distance between the probability distributions.
+
+    Args:
+        s1: Strategy
+        s2: Strategy
+
+    Returns:
+        float. The average Euclidean distance between the distributions.
     """
     common_keys = [k for k in s1.keys() if k in s2.keys()]
     distances = []
@@ -85,8 +119,8 @@ def compare_strategies(s1, s2):
 # The Game object holds a game state at any point in time, and can return an information set label
 # for that game state, which uniquely identifies the information set and is the same for all states
 # in that information set.
-def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets, action_counts,
-                  strategy_t, strategy_t_1, use_chance_sampling=False):
+def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typing.Any, ActionFloat],
+                  action_counts, strategy_t, strategy_t_1, use_chance_sampling=False):
     # If the node is terminal, just return the payoffs
     if is_terminal(node):
         return payoffs(node)[i]
@@ -117,9 +151,8 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets, action_counts,
     values_Itoa = {a: 0 for a in available_actions}
 
     # Initialise strategy_t[information_set] uniformly at random.
-    if information_set not in strategy_t:
-        strategy_t[information_set] = {
-            a: 1.0/float(len(available_actions)) for a in available_actions}
+    if information_set not in strategy_t.get_info_sets():
+        strategy_t.set_uniform_action_probs(information_set, available_actions)
 
     # Compute the counterfactual value of this information set by computing the counterfactual
     # value of the information sets where the player plays each available action and taking
@@ -128,7 +161,7 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets, action_counts,
         if player == 1:
             values_Itoa[a] = cfr_recursive(
                 game, node.children[a], i, t, pi_c,
-                strategy_t[information_set][a] * pi_1, pi_2,
+                strategy_t.get_action_probs(information_set)[a] * pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
                 use_chance_sampling=use_chance_sampling)
         else:
@@ -144,44 +177,21 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets, action_counts,
     # action in the information set. First initialise regrets with this
     # information set if necessary.
     if information_set not in regrets:
-        regrets[information_set] = {ad: 0.0 for ad in available_actions}
+        regrets[information_set] = ActionFloat.initialise_zero(available_actions)
     if player == i:
+        if information_set not in action_counts:
+            action_counts[information_set] = ActionFloat.initialise_zero(available_actions)
         for a in available_actions:
             pi_minus_i = pi_c * pi_1 if i == 2 else pi_c * pi_2
             pi_i = pi_1 if i == 1 else pi_2
-            regrets[information_set][a] += (values_Itoa[a] - value) * pi_minus_i
-            if information_set not in action_counts:
-                action_counts[information_set] = {
-                    ad: 0.0 for ad in available_actions}
-            action_counts[information_set][a] += pi_c * pi_i * \
-                strategy_t[information_set][a]
+            regrets[information_set].add(a, (values_Itoa[a] - value) * pi_minus_i)
+            action_counts[information_set][a] += pi_c * pi_i * strategy_t[information_set][a]
 
         # Update strategy t plus 1
-        strategy_t_1[information_set] = compute_regret_matching(
-            regrets[information_set]
-        )
+        strategy_t_1[information_set] = compute_regret_matching(regrets[information_set])
 
     # Return the value
     return value
-
-
-def compute_regret_matching(regrets):
-    """ Given regrets r_i for actions a_i, we compute the regret matching
-    strategy as follows.  Define denominator = sum_i max(0, r_i). If denominator
-    > 0, play action a_i proportionally to max(0, r_i).  Otherwise, play all
-    actions uniformly.
-    """
-
-    # If no regrets are positive, just return the uniform probability
-    # distribution on available actions.
-    if max([v for k, v in regrets.items()]) <= 0.0:
-        return {a: 1.0 / float(len(regrets)) for a in regrets}
-    else:
-        # Otherwise take the positive part of each regret (i.e. the maximum of
-        # the regret and zero), and play actions with probability proportional
-        # to positive regret.
-        denominator = sum([max(0.0, v) for k, v in regrets.items()])
-        return {k: max(0.0, v) / denominator for k, v in regrets.items()}
 
 
 def evaluate_strategies(game, strategy, num_iters=500):
