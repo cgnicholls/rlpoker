@@ -1,6 +1,5 @@
 # coding: utf-8
 
-import abc
 import typing
 
 import numpy as np
@@ -171,44 +170,55 @@ class InformationSetAdvantages(typing.NamedTuple):
 
 
 class ExtensiveGameNode:
-    """ A class for a game node in an extensive form game.
     """
-    def __init__(self, player, action_list=(), hidden_from=set()):
-        # Which player is to play in the node. Use -1 for terminal, 0 for
-        # chance, 1 for player 1, 2 for player 2.
+    A game node in an extensive form game.
+    """
+    def __init__(self, player: int,
+                 action_list: typing.Tuple=(),
+                 children: typing.Optional[typing.Dict]=None,
+                 hidden_from: typing.Optional[typing.Set]=None,
+                 chance_probs: typing.Optional[ActionFloat]=None,
+                 utility: typing.Optional[typing.Dict]=None):
+        """
+        Args:
+            player: int. The player to play in the node. Use -1 for terminal, 0 for chance, 1 for player 1,
+                2 for player 2.
+            action_list: tuple. The sequence of actions leading to this node.
+            children: Dict. Maps available actions in the node to ExtensiveGameNode objects resulting from taking
+                the action in this node.
+            hidden_from: Set or None. The set of players from which the actions in this node are hidden.
+            chance_probs: ActionFloat or None. Store the chance probabilities for chance nodes.
+            utility: Dict or None. The utility of the node to each player. Only pass for terminal nodes.
+        """
         self.player = player
 
-        # A dictionary of children for the node. Keys are the actions in the
-        # node, and values are ExtensiveGameNode objects resulting from taking
-        # the action in this node.
-        self.children = {}
+        self.children = dict() if children is None else children
 
-        # A list of players from which the actions in this node are hidden.
-        self.hidden_from = hidden_from
+        self.hidden_from = set() if hidden_from is None else hidden_from
 
-        # Utility of the node to each player (as a dictionary). Only relevant
-        # for terminal nodes.
-        self.utility = {}
+        self.utility = dict() if utility is None else utility
 
-        # If the node is a chance node, then store the chance probs. This is a
-        # dictionary with keys the actions and probs the probability of choosing
-        # this action.
-        self.chance_probs = {}
+        self.chance_probs = dict() if chance_probs is None else chance_probs
 
-        # Store an action list.
         self.action_list = action_list
 
         # The node can also store extra information.
-        self.extra_info = {}
+        self.extra_info = dict()
 
     def __str__(self):
         return "\n".join(["Player: {}".format(self.player),
-                         "Actions: {}".format(list(self.children.keys())),
+                         "Actions: {}".format(list(self.actions)),
                          "Hidden from: {}".format(self.hidden_from),
                          "Utility: {}".format(self.utility),
                          "Chance probs: {}".format(self.chance_probs),
                          "Action list: {}".format(self.action_list)])
 
+    @property
+    def actions(self):
+        if self.children is None:
+            return []
+        else:
+            return list(self.children.keys())
 
 
 class ExtensiveGame:
@@ -269,7 +279,7 @@ class ExtensiveGame:
                 # actions to the action stack. If an action is hidden from the
                 # player, then add -1 to signify this.
                 node_stack.append(child)
-                if player in node.hidden_from:
+                if node.hidden_from is not None and player in node.hidden_from:
                     visible_actions_stack.append(visible_actions + [-1])
                 else:
                     visible_actions_stack.append(visible_actions + [action])
@@ -337,6 +347,54 @@ class ExtensiveGame:
 
             # The node is terminal. Add the utility for player 1 to the results.
             results.append(node.utility[1])
+
+        return results
+
+    def expected_value_exact(self, strategy_1: Strategy, strategy_2: Strategy):
+        """Given a strategy for player 1 and a strategy for player 2, compute the exact expected value for player 1.
+
+        Args:
+            strategy_1: Strategy.
+            strategy_2: Strategy.
+
+        Returns the expected value of strategy 1 against strategy 2.
+        """
+        results = []
+        node = self.root
+        while node.player != -1:
+            # Default to playing randomly.
+            actions = [a for a in node.children.keys()]
+            probs = [1.0 / float(len(actions)) for a in actions]
+
+            # If it's a chance node, then sample an outcome.
+            if node.player == 0:
+                probs = node.chance_probs.values()
+            elif node.player == 1:
+                # It's player 1's node, so use their strategy to make a
+                # decision.
+                info_set = self.info_set_ids[node]
+                if info_set in strategy_1:
+                    probs = strategy_1[info_set].values()
+            elif node.player == 2:
+                # It's player 2's node, so use their strategy to make a
+                # decision.
+                info_set = self.info_set_ids[node]
+                if info_set in strategy_2:
+                    probs = strategy_2[info_set].values()
+
+            probs = [p for p in probs]
+
+            # Make sure the probabilities sum to 1
+            assert abs(1.0 - sum(probs)) < 1e-5
+
+            # Sample an action from the probability distribution.
+            action = np.random.choice(np.array(actions), p=np.array(probs))
+
+            # Move into the child node.
+            node = node.children[action]
+
+        # The node is terminal. Add the utility for player 1 to the results.
+        results.append(node.utility[1])
 
         return results
 

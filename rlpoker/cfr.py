@@ -38,6 +38,16 @@ def compute_regret_matching(action_regrets: ActionFloat):
 
 
 def cfr(game, num_iters=10000, use_chance_sampling=True):
+    """
+
+    Args:
+        game:
+        num_iters:
+        use_chance_sampling:
+
+    Returns:
+        average_strategy, exploitabilities
+    """
     # regrets is a dictionary where the keys are the information sets and values
     # are dictionaries from actions available in that information set to the
     # counterfactual regret for not playing that action in that information set.
@@ -73,7 +83,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
         strategy_t = strategy_t_1.copy()
 
         # Compute the exploitability of the strategy.
-        if t % 1000 == 0:
+        if t % 10 == 0:
             completed_strategy = game.complete_strategy_uniformly(average_strategy)
             exploitability = best_response.compute_exploitability(
                 game, completed_strategy)

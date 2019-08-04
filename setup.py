@@ -7,4 +7,5 @@ setup(name='rlpoker',
       author='Chris Nicholls',
       author_email='cgnicholls@gmail.com',
       license='MIT',
-      packages=['rlpoker'])
+      packages=['rlpoker']
+)

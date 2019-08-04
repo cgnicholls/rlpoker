@@ -2,18 +2,16 @@
 (2019).
 """
 
-import collections
 import typing
 
-import numpy as np
 import tensorflow as tf
 
-from rlpoker import best_response
 from rlpoker import cfr
-from rlpoker.cfr_game import (get_available_actions, get_information_set, sample_chance_action, is_terminal,
-    payoffs, which_player)
+from rlpoker.cfr_game import (
+    get_available_actions, sample_chance_action, is_terminal, payoffs, which_player)
 from rlpoker.util import sample_action
-from rlpoker.extensive_game import ActionFloat, ActionIndexer, InformationSetAdvantages
+from rlpoker.extensive_game import ActionIndexer, InformationSetAdvantages
+from rlpoker import buffer
 
 
 class RegretPredictor:
@@ -113,7 +111,24 @@ class DeepRegretNetwork(RegretPredictor):
         })
 
 
-def deep_cfr(game):
+def deep_cfr(game, num_iters=100, num_traversals=50, advantage_maxlen=1000000, strategy_maxlen=1000000):
+    """
+
+    Args:
+        game:
+        num_iters: int. The number of iterations to run deep CFR for.
+        num_traversals: int. The number of traversals per CFR iteration.
+
+    Returns:
+        strategy, exploitability.
+    """
+
+    advantage_memories = {
+        1: buffer.Reservoir(maxlen=advantage_maxlen),
+        2: buffer.Reservoir(maxlen=advantage_maxlen)
+    }
+    strategy_memory = buffer.Reservoir(maxlen=strategy_maxlen)
+
     with tf.Session() as sess:
         network1 = DeepRegretNetwork(game.state_dim, game.action_dim, 1)
         network2 = DeepRegretNetwork(game.state_dim, game.action_dim, 2)
@@ -121,8 +136,17 @@ def deep_cfr(game):
         network1.initialise(sess)
         network2.initialise(sess)
 
+        # Iterate over players and do cfr traversals.
+        for t in range(num_iters):
+            for player in [1, 2]:
+                for i in range(num_traversals):
+                    cfr_traverse(game, player, network1, network2, advantage_memories)
+
+
+
 def cfr_traverse(game, node, player: int, network1: RegretPredictor, network2: RegretPredictor,
-                 advantage_memory, strategy_memory, t, action_indexer: ActionIndexer):
+                 advantage_memories: typing.Dict[int, buffer.Reservoir], strategy_memory: buffer.Reservoir,
+                 t: int, action_indexer: ActionIndexer):
     if is_terminal(node):
         return payoffs(node)[player]
     elif which_player(node) == 0:

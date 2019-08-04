@@ -8,6 +8,8 @@ from rlpoker.games.card import get_deck
 from rlpoker.games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
 
+from rlpoker import deep_cfr
+
 
 if __name__ == "__main__":
     games = ['Leduc', 'OneCardPoker']
@@ -40,6 +42,8 @@ if __name__ == "__main__":
 
     strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
         use_chance_sampling=args.use_chance_sampling)
+
+    deep_cfr.deep_cfr(game)
 
     # Save the strategy and plot the performance.
 

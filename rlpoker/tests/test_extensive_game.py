@@ -13,6 +13,33 @@ class TestExtensiveGame(unittest.TestCase):
 
         self.assertEqual(action_indexer.get_action(2), 'c')
 
+    def test_expected_value_exact(self):
+
+        # Define an extensive form game, and strategies for both players.
+        root = extensive_game.ExtensiveGameNode(0, action_list=())
+
+        #
+
+        game = extensive_game.ExtensiveGame(root)
+
+
+
+class TestExtensiveGameNode(unittest.TestCase):
+
+    def test_actions(self):
+
+        node = extensive_game.ExtensiveGameNode(
+            player=1,
+            action_list=(),
+            children={
+                'a': extensive_game.ExtensiveGameNode(2, ('a')),
+                'b': extensive_game.ExtensiveGameNode(2, ('b'))
+            }
+        )
+
+        self.assertEqual(node.actions, ['a', 'b'])
+
+
 
 class TestStrategy(unittest.TestCase):
 
