@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import collections
 import typing
 
 import numpy as np
@@ -320,24 +321,22 @@ class ExtensiveGame:
 
                 # If it's a chance node, then sample an outcome.
                 if node.player == 0:
-                    probs = node.chance_probs.values()
+                    probs = [node.chance_probs[action] for action in actions]
                 elif node.player == 1:
                     # It's player 1's node, so use their strategy to make a
                     # decision.
                     info_set = self.info_set_ids[node]
                     if info_set in strategy_1:
-                        probs = strategy_1[info_set].values()
+                        probs = [strategy_1[info_set][action] for action in actions]
                 elif node.player == 2:
                     # It's player 2's node, so use their strategy to make a
                     # decision.
                     info_set = self.info_set_ids[node]
                     if info_set in strategy_2:
-                        probs = strategy_2[info_set].values()
-
-                probs = [p for p in probs]
+                        probs = [strategy_2[info_set][action] for action in actions]
 
                 # Make sure the probabilities sum to 1
-                assert abs(1.0 - sum(probs)) < 1e-5
+                assert np.isclose(sum(probs), 1.0)
 
                 # Sample an action from the probability distribution.
                 action = np.random.choice(np.array(actions), p=np.array(probs))
@@ -350,53 +349,48 @@ class ExtensiveGame:
 
         return results
 
-    def expected_value_exact(self, strategy_1: Strategy, strategy_2: Strategy):
+    def expected_value_exact(self, strategy1: Strategy, strategy2: Strategy) -> typing.Tuple[float, float]:
         """Given a strategy for player 1 and a strategy for player 2, compute the exact expected value for player 1.
 
         Args:
-            strategy_1: Strategy.
-            strategy_2: Strategy.
+            strategy1: Strategy.
+            strategy2: Strategy.
 
-        Returns the expected value of strategy 1 against strategy 2.
+        Returns:
+            utility1, utility2. The expected utility for player 1 and for player 2.
         """
-        results = []
-        node = self.root
-        while node.player != -1:
-            # Default to playing randomly.
-            actions = [a for a in node.children.keys()]
-            probs = [1.0 / float(len(actions)) for a in actions]
+        to_explore = collections.deque([(self.root, 1.0)])
 
-            # If it's a chance node, then sample an outcome.
-            if node.player == 0:
-                probs = node.chance_probs.values()
-            elif node.player == 1:
-                # It's player 1's node, so use their strategy to make a
-                # decision.
-                info_set = self.info_set_ids[node]
-                if info_set in strategy_1:
-                    probs = strategy_1[info_set].values()
-            elif node.player == 2:
-                # It's player 2's node, so use their strategy to make a
-                # decision.
-                info_set = self.info_set_ids[node]
-                if info_set in strategy_2:
-                    probs = strategy_2[info_set].values()
+        strategies = {
+            1: strategy1,
+            2: strategy2
+        }
 
-            probs = [p for p in probs]
+        # Traverse the tree, keeping track of the probabilities of reaching each node.
 
-            # Make sure the probabilities sum to 1
-            assert abs(1.0 - sum(probs)) < 1e-5
+        expected_value = {
+            1: 0.0,
+            2: 0.0
+        }
+        while len(to_explore) > 0:
+            node, reach_prob = to_explore.popleft()
 
-            # Sample an action from the probability distribution.
-            action = np.random.choice(np.array(actions), p=np.array(probs))
+            if node.player == -1:
+                expected_value[1] += reach_prob * node.utility[1]
+                expected_value[2] += reach_prob * node.utility[2]
+            else:
+                for action, child in node.children.items():
+                    if node.player == 0:
+                        # Chance node
+                        action_prob = node.chance_probs[action]
+                    else:
+                        # Player node
+                        info_set = self.info_set_ids[node]
+                        action_prob = strategies[node.player][info_set][action]
 
-            # Move into the child node.
-            node = node.children[action]
+                    to_explore.append((child, reach_prob * action_prob))
 
-        # The node is terminal. Add the utility for player 1 to the results.
-        results.append(node.utility[1])
-
-        return results
+        return expected_value[1], expected_value[2]
 
     def complete_strategy_uniformly(self, strategy: Strategy):
         """ Given a partial strategy, i.e. a dictionary from a subset of the
@@ -421,3 +415,36 @@ class ExtensiveGame:
         each information set.
         """
         return set(strategy.keys()) == set(self.info_set_ids.values())
+
+    def get_node(self, actions: typing.Tuple) -> ExtensiveGameNode:
+        """
+        Returns the node in the tree corresponding to the given action list, or None, if no such node exists.
+
+        Args:
+            actions: list of actions.
+
+        Returns:
+            The node with that action list.
+        """
+        node = self.root
+        for action in actions:
+            if action in node.children:
+                node = node.children[action]
+            else:
+                return None
+
+        return node
+
+    def get_info_set_id(self, node: ExtensiveGameNode):
+        """
+        Returns the information set id for the given node. Must be player 1 or 2 node.
+
+        Args:
+            node: ExtensiveGameNode.
+
+        Returns:
+            information set id.
+        """
+        assert node.player > 0
+
+
