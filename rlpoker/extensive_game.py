@@ -188,7 +188,7 @@ class ExtensiveGameNode:
                 the action in this node.
             hidden_from: Set or None. The set of players from which the actions in this node are hidden.
             chance_probs: ActionFloat or None. Store the chance probabilities for chance nodes.
-            utility: Dict or None. The utility of the node to each player. Only pass for terminal nodes.
+            utility: Dict or None. The utility of the node to each player. Only specify this for terminal nodes.
         """
         self.player = player
 

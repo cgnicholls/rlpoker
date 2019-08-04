@@ -23,7 +23,6 @@ class TestExtensiveGame(unittest.TestCase):
         game = extensive_game.ExtensiveGame(root)
 
 
-
 class TestExtensiveGameNode(unittest.TestCase):
 
     def test_actions(self):
@@ -32,12 +31,12 @@ class TestExtensiveGameNode(unittest.TestCase):
             player=1,
             action_list=(),
             children={
-                'a': extensive_game.ExtensiveGameNode(2, ('a')),
-                'b': extensive_game.ExtensiveGameNode(2, ('b'))
+                'a': extensive_game.ExtensiveGameNode(2, ('a',)),
+                'b': extensive_game.ExtensiveGameNode(2, ('b',))
             }
         )
 
-        self.assertEqual(node.actions, ['a', 'b'])
+        self.assertEqual(set(node.actions), {'a', 'b'})
 
 
 
