@@ -398,6 +398,7 @@ def compute_betting_round_encoding(actions, max_raises):
     raise_encoding = one_hot_encoding(max_raises + 1, num_raises)
     return np.concatenate([first_call, raise_encoding, last_call], axis=0)
 
+
 def compute_state_vectors(info_set_ids, card_indices, max_raises):
     """Computes a state vector for each information set id. This is a unique vector
     for each information set, which encodes the information set.

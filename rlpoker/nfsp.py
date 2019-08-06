@@ -41,7 +41,7 @@ def compute_agent_exploitability(agent: Agent, sess: tf.Session, game: NFSPGame)
     Args:
         agent: Agent.
         sess: tensorflow session.
-        game: ExtensiveGame.
+        game: NFSPGame.
 
     Returns:
         float. Exploitability of the agent's strategy.

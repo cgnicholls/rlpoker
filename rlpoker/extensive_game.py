@@ -142,28 +142,6 @@ class Strategy:
         return "Strategy({})".format("\n".join(lines))
 
 
-class ActionIndexer:
-    """
-    An ActionIndexer maps possible actions in a game to indices, so we can use neural networks and map between
-    actions and action indices.
-    """
-
-    def __init__(self, actions: typing.List[typing.Any]):
-        assert len(set(actions)) == len(actions), "Actions must be unique."
-
-        self.actions = actions
-        self.action_indices = dict(zip(actions, range(len(actions))))
-
-    def get_index(self, action):
-        return self.action_indices[action]
-
-    def get_action(self, index):
-        return self.actions[index]
-
-    def get_action_dim(self):
-        return len(self.actions)
-
-
 class InformationSetAdvantages(typing.NamedTuple):
     info_set: typing.Any
     time: int

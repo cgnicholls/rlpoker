@@ -4,13 +4,13 @@ import unittest
 import numpy as np
 import tensorflow as tf
 
-from rlpoker import deep_cfr, extensive_game
+from rlpoker import deep_cfr, neural_game
 
 class TestDeepRegretNetwork(unittest.TestCase):
 
     def test_initialise(self):
 
-        action_indexer = extensive_game.ActionIndexer(['a', 'b'])
+        action_indexer = neural_game.ActionIndexer(['a', 'b'])
         network = deep_cfr.DeepRegretNetwork(state_dim=5, action_indexer=action_indexer, player=1)
 
         with tf.Session() as sess:

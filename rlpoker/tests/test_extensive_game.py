@@ -47,14 +47,6 @@ def rock_paper_scissors() -> extensive_game.ExtensiveGame:
 
 class TestExtensiveGame(unittest.TestCase):
 
-    def test_action_indexing(self):
-        action_indexer = extensive_game.ActionIndexer(['a', 'b', 'c', 'd'])
-
-        self.assertEqual(action_indexer.get_index('a'), 0)
-        self.assertEqual(action_indexer.get_index('d'), 3)
-
-        self.assertEqual(action_indexer.get_action(2), 'c')
-
     def test_expected_value_exact(self):
 
         game = rock_paper_scissors()
@@ -155,13 +147,3 @@ class TestActionFloat(unittest.TestCase):
         action_floats1['a1'] = 2.0
 
         self.assertEqual(action_floats2, extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6}))
-
-
-class TestActionIndexer(unittest.TestCase):
-
-    def test_get_dim(self):
-        action_indexer = extensive_game.ActionIndexer(['a', 'b', 'c'])
-        self.assertEqual(action_indexer.get_action_dim(), 3)
-
-        action_indexer = extensive_game.ActionIndexer(['a', 'b', 'c', 'd', 'e'])
-        self.assertEqual(action_indexer.get_action_dim(), 5)

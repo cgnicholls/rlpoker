@@ -10,8 +10,9 @@ from rlpoker import cfr
 from rlpoker.cfr_game import (
     get_available_actions, sample_chance_action, is_terminal, payoffs, which_player)
 from rlpoker.util import sample_action
-from rlpoker.extensive_game import ActionIndexer, InformationSetAdvantages
 from rlpoker import buffer
+from rlpoker import extensive_game
+from rlpoker import neural_game
 
 
 class RegretPredictor:
@@ -20,7 +21,7 @@ class RegretPredictor:
     A RegretPredictor can be used inside cfr_traverse.
     """
 
-    def predict_advantages(self, info_set_vector, action_indexer: ActionIndexer):
+    def predict_advantages(self, info_set_vector, action_indexer: neural_game.ActionIndexer):
         """
         Predicts advantages for each action available in the information set.
 
@@ -33,7 +34,7 @@ class RegretPredictor:
         """
         raise NotImplementedError("Not implemented in the base class.")
 
-    def compute_action_probs(self, info_set_vector, action_indexer: ActionIndexer):
+    def compute_action_probs(self, info_set_vector, action_indexer: neural_game.ActionIndexer):
         """
         Compute action probabilities in this information set.
 
@@ -46,7 +47,7 @@ class RegretPredictor:
         action_advantages = self.predict_advantages(info_set_vector, action_indexer)
         return cfr.compute_regret_matching(action_advantages)
 
-    def train(self, batch: typing.List[InformationSetAdvantages]):
+    def train(self, batch: typing.List[extensive_game.InformationSetAdvantages]):
         """
         Train on the given batch of InformationSetAdvantages.
 
@@ -61,7 +62,7 @@ class RegretPredictor:
 
 class DeepRegretNetwork(RegretPredictor):
     
-    def __init__(self, state_dim: int, action_indexer: ActionIndexer, player: int):
+    def __init__(self, state_dim: int, action_indexer: neural_game.ActionIndexer, player: int):
         """
         A DeepRegretNetwork uses a neural network to predict advantages for actions in information sets.
 
@@ -111,13 +112,15 @@ class DeepRegretNetwork(RegretPredictor):
         })
 
 
-def deep_cfr(game, num_iters=100, num_traversals=50, advantage_maxlen=1000000, strategy_maxlen=1000000):
+def deep_cfr(game: neural_game.NeuralGame, num_iters: int=100, num_traversals: int=50,
+             advantage_maxlen: int=1000000, strategy_maxlen: int=1000000):
     """
-
     Args:
         game:
         num_iters: int. The number of iterations to run deep CFR for.
         num_traversals: int. The number of traversals per CFR iteration.
+        advantage_maxlen: int. The maximum length of the advantage memories.
+        strategy_maxlen: int. The maximum length of the strategy memory.
 
     Returns:
         strategy, exploitability.
@@ -129,8 +132,10 @@ def deep_cfr(game, num_iters=100, num_traversals=50, advantage_maxlen=1000000, s
     }
     strategy_memory = buffer.Reservoir(maxlen=strategy_maxlen)
 
+    action_indexer = game.action_indexer
+
     with tf.Session() as sess:
-        network1 = DeepRegretNetwork(game.state_dim, game.action_dim, 1)
+        network1 = DeepRegretNetwork(game.state_dim, action_indexer, 1)
         network2 = DeepRegretNetwork(game.state_dim, game.action_dim, 2)
 
         network1.initialise(sess)
@@ -140,20 +145,21 @@ def deep_cfr(game, num_iters=100, num_traversals=50, advantage_maxlen=1000000, s
         for t in range(num_iters):
             for player in [1, 2]:
                 for i in range(num_traversals):
-                    cfr_traverse(game, player, network1, network2, advantage_memories)
+                    cfr_traverse(game, game.root, player, network1, network2, advantage_memories,
+                                 strategy_memory, t, action_indexer)
 
 
 
 def cfr_traverse(game, node, player: int, network1: RegretPredictor, network2: RegretPredictor,
                  advantage_memories: typing.Dict[int, buffer.Reservoir], strategy_memory: buffer.Reservoir,
-                 t: int, action_indexer: ActionIndexer):
+                 t: int, action_indexer: neural_game.ActionIndexer):
     if is_terminal(node):
         return payoffs(node)[player]
     elif which_player(node) == 0:
         # Chance player
         a = sample_chance_action(node)
         return cfr_traverse(game, node.children[a], player, network1, network2,
-                            advantage_memory, strategy_memory, t, action_indexer)
+                            advantage_memories, strategy_memory, t, action_indexer)
     elif which_player(node) == player:
         # It's the traversing player's turn.
         state_vector = game.get_state_vector_for_node(node)
@@ -161,7 +167,7 @@ def cfr_traverse(game, node, player: int, network1: RegretPredictor, network2: R
         for action in get_available_actions(node):
             child = node.children[action]
             values[action] = cfr_traverse(game, child, player, network1, network2,
-                                          advantage_memory, strategy_memory, t, action_indexer)
+                                          advantage_memories, strategy_memory, t, action_indexer)
         regrets = dict()
 
         # Compute the player's strategy
