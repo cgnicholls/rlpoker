@@ -191,11 +191,21 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
     if player == i:
         if information_set not in action_counts:
             action_counts[information_set] = ActionFloat.initialise_zero(available_actions)
+
+        action_counts_to_add = {a: 0.0 for a in available_actions}
+        regrets_to_add = {a: 0.0 for a in available_actions}
         for a in available_actions:
             pi_minus_i = pi_c * pi_1 if i == 2 else pi_c * pi_2
             pi_i = pi_1 if i == 1 else pi_2
-            regrets[information_set].add(a, (values_Itoa[a] - value) * pi_minus_i)
-            action_counts[information_set][a] += pi_c * pi_i * strategy_t[information_set][a]
+            regrets_to_add[a] = (values_Itoa[a] - value) * pi_minus_i
+            action_counts_to_add[a] = pi_c * pi_i * strategy_t[information_set][a]
+
+        # Update the regrets and action counts.
+        regrets[information_set] = ActionFloat.sum(regrets[information_set], ActionFloat(regrets_to_add))
+        action_counts[information_set] = ActionFloat.sum(
+            action_counts[information_set],
+            ActionFloat(action_counts_to_add)
+        )
 
         # Update strategy t plus 1
         strategy_t_1[information_set] = compute_regret_matching(regrets[information_set])

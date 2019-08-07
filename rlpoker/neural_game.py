@@ -1,24 +1,7 @@
 
 import typing
 
-from rlpoker import extensive_game
-
-
-class NeuralGame(extensive_game.ExtensiveGame):
-
-    def __init__(self):
-        pass
-
-    def get_vector(self, info_set_id):
-        pass
-
-    @property
-    def state_dim(self):
-        pass
-
-    @property
-    def action_indexer(self):
-        pass
+import numpy as np
 
 
 class ActionIndexer:
@@ -39,5 +22,42 @@ class ActionIndexer:
     def get_action(self, index):
         return self.actions[index]
 
-    def get_action_dim(self):
+    @property
+    def action_dim(self):
         return len(self.actions)
+
+
+class InfoSetVectoriser:
+
+    def __init__(self, vectors: typing.Dict):
+        """Maps info set ids to numpy arrays.
+
+        Args:
+            vectors: Dict. A dictionary mapping info set ids to numpy arrays.
+        """
+        self.vectors = vectors
+
+        self._state_shape = self._get_state_shape(list(self.vectors.values()))
+
+    @staticmethod
+    def _get_state_shape(vectors: typing.List[np.ndarray]):
+        if len(vectors) == 0:
+            raise ValueError("No vectors passed.")
+
+        for v in vectors:
+            if type(v) != np.ndarray:
+                raise ValueError("All vectors must be ndarrays.")
+
+        shapes = {v.shape for v in vectors}
+
+        if len(shapes) > 1:
+            raise ValueError("Shapes of all state vectors must be the same.")
+
+        return list(shapes)[0]
+
+    def get_vector(self, info_set_id) -> np.ndarray:
+        return self.vectors[info_set_id]
+
+    @property
+    def state_shape(self):
+        return self.state_shape

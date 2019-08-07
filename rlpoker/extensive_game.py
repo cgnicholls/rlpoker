@@ -1,12 +1,13 @@
 # coding: utf-8
 
 import collections
+from collections.abc import Mapping
 import typing
 
 import numpy as np
 
 
-class ActionFloat:
+class ActionFloat(Mapping):
     """
     ActionFloat stores a float for each action.
     """
@@ -41,22 +42,27 @@ class ActionFloat:
     def __init__(self, action_floats: typing.Dict[typing.Any, float]):
         self.action_floats = action_floats
 
-    def add(self, action: typing.Any, value: float):
+    @staticmethod
+    def sum(action_float1: 'ActionFloat', action_float2: 'ActionFloat') -> 'ActionFloat':
         """
-        Adds the value to the current value for the action.
-
-        If the action isn't already in the dictionary, it is added with initial value 0.
+        Adds the two action floats together elementwise. If an action exists in one but not the other, then it is
+        treated as being zero in the one it doesn't exist in.
 
         Args:
-            action: typing.Any. The action to add regret to.
-            value: float. The value to add.
+            action_float1: ActionFloat.
+            action_float2: ActionFloat.
 
         Returns:
-            None
+            ActionFloat. An ActionFloat with actions given by the union of the actions in action_float1 and
+            action_float2, and values being their sum.
         """
-        if action not in self.action_floats:
-            self.action_floats[action] = 0.0
-        self.action_floats[action] += value
+        action_float = {action: action_float1[action] for action in action_float1}
+        for action in action_float2:
+            if action not in action_float:
+                action_float[action] = 0.0
+            action_float[action] += action_float2[action]
+
+        return ActionFloat(action_float)
 
     def action_list(self):
         """
@@ -67,16 +73,9 @@ class ActionFloat:
     def __getitem__(self, action):
         return self.action_floats[action]
 
-    def __setitem__(self, action, regret):
-        self.action_floats[action] = regret
-
-    def items(self):
-        for k, v in self.action_floats.items():
-            yield k, v
-
-    def keys(self):
-        for k in self.action_floats.keys():
-            yield k
+    def __iter__(self):
+        for action in self.action_floats:
+            yield action
 
     def __eq__(self, other):
         if not isinstance(other, ActionFloat):
@@ -220,7 +219,9 @@ class ExtensiveGame:
         if only_leaves and len(node.children) == 0:
             print(action_list, node.utility)
         elif not only_leaves:
-            print(action_list)
+            print("Node for action list: {}".format(action_list))
+            print(node)
+            print("-----")
         for action, child in node.children.items():
             ExtensiveGame.print_tree_recursive(
                 child, action_list + (action,), only_leaves)
@@ -424,5 +425,4 @@ class ExtensiveGame:
             information set id.
         """
         assert node.player > 0
-
-
+        return self.info_set_ids[node]

@@ -18,3 +18,13 @@ class TestUtil(unittest.TestCase):
         ]
 
         self.assertEqual(actions, expected_actions)
+
+        strategy = {'R': 0.2, 'P': 0.7, 'S': 0.1}
+        np.random.seed(0)
+        actions = [util.sample_action(strategy) for i in range(20)]
+
+        expected_actions = [
+            'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'S', 'P', 'P', 'P', 'P', 'S', 'R', 'R', 'R', 'P', 'P', 'P'
+        ]
+
+        self.assertEqual(actions, expected_actions)

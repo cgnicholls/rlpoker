@@ -1,55 +1,14 @@
 import unittest
 
 from rlpoker import extensive_game
-
-
-def rock_paper_scissors() -> extensive_game.ExtensiveGame:
-    """Returns a rock paper scissors game.
-
-    Returns:
-        ExtensiveGame
-    """
-    # Define rock, paper scissors.
-    root = extensive_game.ExtensiveGameNode(1, action_list=(), hidden_from={2})
-
-    # Add actions for player 1.
-    root.children = {
-        'R': extensive_game.ExtensiveGameNode(2, action_list=('R',), hidden_from={1}),
-        'P': extensive_game.ExtensiveGameNode(2, action_list=('P',), hidden_from={1}),
-        'S': extensive_game.ExtensiveGameNode(2, action_list=('S',), hidden_from={1}),
-    }
-
-    # Add actions for player 2.
-    root.children['R'].children = {
-        'R': extensive_game.ExtensiveGameNode(-1, action_list=('R', 'R'), utility={1: 0, 2: 0}),
-        'P': extensive_game.ExtensiveGameNode(-1, action_list=('R', 'P'), utility={1: -1, 2: 1}),
-        'S': extensive_game.ExtensiveGameNode(-1, action_list=('R', 'S'), utility={1: 1, 2: -1}),
-    }
-
-    # Add actions for player 2.
-    root.children['P'].children = {
-        'R': extensive_game.ExtensiveGameNode(-1, action_list=('P', 'R'), utility={1: 1, 2: -1}),
-        'P': extensive_game.ExtensiveGameNode(-1, action_list=('P', 'P'), utility={1: 0, 2: 0}),
-        'S': extensive_game.ExtensiveGameNode(-1, action_list=('P', 'S'), utility={1: -1, 2: 1}),
-    }
-
-    # Add actions for player 2.
-    root.children['S'].children = {
-        'R': extensive_game.ExtensiveGameNode(-1, action_list=('S', 'R'), utility={1: -1, 2: 1}),
-        'P': extensive_game.ExtensiveGameNode(-1, action_list=('S', 'P'), utility={1: 1, 2: -1}),
-        'S': extensive_game.ExtensiveGameNode(-1, action_list=('S', 'S'), utility={1: 0, 2: 0}),
-    }
-
-    game = extensive_game.ExtensiveGame(root)
-
-    return game
+from rlpoker.tests.util import rock_paper_scissors
 
 
 class TestExtensiveGame(unittest.TestCase):
 
     def test_expected_value_exact(self):
 
-        game = rock_paper_scissors()
+        game, _, _ = rock_paper_scissors()
 
         strategy1 = extensive_game.Strategy({
             game.info_set_ids[game.get_node(())]: extensive_game.ActionFloat({
@@ -77,7 +36,7 @@ class TestExtensiveGame(unittest.TestCase):
         self.assertEqual(computed2, -expected1)
 
     def test_get_node(self):
-        game = rock_paper_scissors()
+        game, _, _ = rock_paper_scissors()
 
         # Check we can get the root node
         node = game.get_node(actions=())
@@ -112,7 +71,6 @@ class TestExtensiveGameNode(unittest.TestCase):
         self.assertEqual(set(node.actions), {'a', 'b'})
 
 
-
 class TestStrategy(unittest.TestCase):
 
     def test_copy_strategy(self):
@@ -126,13 +84,10 @@ class TestStrategy(unittest.TestCase):
         self.assertEqual(strategy1['info1'], strategy2['info1'])
         self.assertEqual(strategy1['info2'], strategy2['info2'])
 
-        strategy1['info1']['a1'] = 0.2
-        strategy1['info1']['a2'] = 0.8
+        strategy1['info1'] = extensive_game.ActionFloat({'a1': 0.2, 'a2': 0.8})
 
         self.assertEqual(strategy1['info2'], strategy2['info2'])
 
-        print(strategy1)
-        print(strategy2)
         self.assertEqual(strategy2['info1'], extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6}))
 
 
@@ -144,6 +99,23 @@ class TestActionFloat(unittest.TestCase):
 
         self.assertEqual(action_floats1, action_floats2)
 
-        action_floats1['a1'] = 2.0
+        action_floats1 = extensive_game.ActionFloat({'a1': 0.3, 'a2': 0.7})
 
-        self.assertEqual(action_floats2, extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6}))
+        self.assertNotEqual(action_floats1, action_floats2)
+
+    def test_iter(self):
+        action_float = extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6})
+
+        actions = [a for a in action_float]
+        self.assertEqual(set(actions), {'a1', 'a2'})
+
+    def test_add(self):
+        action_float1 = extensive_game.ActionFloat({'a': 1.0, 'b': -1.0})
+        action_float2 = extensive_game.ActionFloat({'a': 1.0, 'c': 2.0})
+
+        action_float = extensive_game.ActionFloat.sum(action_float1, action_float2)
+
+        expected = extensive_game.ActionFloat({
+            'a': 2.0, 'b': -1.0, 'c': 2.0
+        })
+        self.assertEqual(action_float, expected)
