@@ -64,6 +64,7 @@ class ActionFloat(Mapping):
 
         return ActionFloat(action_float)
 
+    @property
     def action_list(self):
         """
         Returns: list of the actions.
@@ -116,10 +117,13 @@ class Strategy:
         self.strategy[info_set] = ActionFloat.initialise_uniform(available_actions)
 
     def __getitem__(self, item):
-        return self.strategy[item]
+        return self.strategy.__getitem__(item)
 
     def __setitem__(self, key, value):
-        self.strategy[key] = value
+        self.strategy.__setitem__(key, value)
+
+    def __contains__(self, item):
+        return item in self.strategy
 
     def get_action_probs(self, info_set):
         return self.strategy[info_set]
@@ -140,11 +144,37 @@ class Strategy:
             lines += ["Info set: {}, Action probs: {}".format(info_set, action_probs)]
         return "Strategy({})".format("\n".join(lines))
 
+    def __eq__(self, other):
+        if not isinstance(other, Strategy):
+            return False
+        return self.strategy == other.strategy
 
-class InformationSetAdvantages(typing.NamedTuple):
-    info_set: typing.Any
-    time: int
-    advantages: typing.Dict[typing.Any, float]
+
+def compute_weighted_strategy(strategies: typing.Dict[typing.Any, typing.List[typing.Tuple[float, ActionFloat]]]):
+    """Computes the weighted strategy in each information set.
+
+    Args:
+        strategies: dictionary mapping info set ids to lists of weighted strategies. A weighted strategy is just a
+        list of tuples, where each tuple is (weight, strategy). Here, strategy is just an ActionFloat.
+
+    Returns:
+        Strategy. The mean strategy in each info set, weighted by the weights.
+    """
+    strategy = dict()
+    for info_set_id, weighted_strategies in strategies.items():
+        info_set_probs = collections.defaultdict(list)
+        weights = [s[0] for s in weighted_strategies]
+        for _, probs in weighted_strategies:
+            for action in probs.action_list:
+                info_set_probs[action].append(probs[action])
+
+        info_set_strategy = dict()
+        for action, probs in info_set_probs.items():
+            info_set_strategy[action] = np.sum(np.array(weights) * np.array(probs)) / np.sum(np.array(weights))
+
+        strategy[info_set_id] = ActionFloat(info_set_strategy)
+
+    return Strategy(strategy)
 
 
 class ExtensiveGameNode:
@@ -393,7 +423,19 @@ class ExtensiveGame:
         """Returns whether or not the strategy contains probabilities for
         each information set.
         """
-        return set(strategy.keys()) == set(self.info_set_ids.values())
+        # Look through all the information sets and check the strategy gives a probability for each action.
+        for node, info_set_id in self.info_set_ids.items():
+            if info_set_id not in strategy:
+                # The strategy is missing in this information set.
+                return False
+
+            strategy_actions = strategy[info_set_id].action_list
+            node_actions = node.children.keys()
+
+            if set(strategy_actions) != set(node_actions):
+                return False
+
+        return True
 
     def get_node(self, actions: typing.Tuple) -> ExtensiveGameNode:
         """

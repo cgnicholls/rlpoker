@@ -13,18 +13,22 @@ class ActionIndexer:
     def __init__(self, actions: typing.List[typing.Any]):
         assert len(set(actions)) == len(actions), "Actions must be unique."
 
-        self.actions = actions
+        self._actions = actions
         self.action_indices = dict(zip(actions, range(len(actions))))
 
     def get_index(self, action):
         return self.action_indices[action]
 
     def get_action(self, index):
-        return self.actions[index]
+        return self._actions[index]
+
+    @property
+    def actions(self):
+        return self._actions
 
     @property
     def action_dim(self):
-        return len(self.actions)
+        return len(self._actions)
 
 
 class InfoSetVectoriser:
@@ -60,4 +64,4 @@ class InfoSetVectoriser:
 
     @property
     def state_shape(self):
-        return self.state_shape
+        return self._state_shape

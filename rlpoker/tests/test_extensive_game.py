@@ -54,6 +54,32 @@ class TestExtensiveGame(unittest.TestCase):
         node = game.get_node(actions=('R', 'P', 'A'))
         self.assertEqual(node, None)
 
+    def test_is_strategy_complete(self):
+        game, _, _ = rock_paper_scissors()
+
+        # Incomplete because missing an information set.
+        strategy = extensive_game.Strategy({
+            (): extensive_game.ActionFloat({'R': 0.4, 'P': 0.5, 'S': 0.1})
+        })
+        computed = game.is_strategy_complete(strategy)
+        self.assertEqual(computed, False)
+
+        # Incomplete because missing an action.
+        strategy = extensive_game.Strategy({
+            (): extensive_game.ActionFloat({'R': 0.4, 'P': 0.5, 'S': 0.1}),
+            (-1,): extensive_game.ActionFloat({'R': 0.4, 'P': 0.5})
+        })
+        computed = game.is_strategy_complete(strategy)
+        self.assertEqual(computed, False)
+
+        # Complete.
+        strategy = extensive_game.Strategy({
+            (): extensive_game.ActionFloat({'R': 0.4, 'P': 0.5, 'S': 0.1}),
+            (-1,): extensive_game.ActionFloat({'R': 0.4, 'P': 0.3, 'S': 0.3})
+        })
+        computed = game.is_strategy_complete(strategy)
+        self.assertEqual(computed, True)
+
 
 class TestExtensiveGameNode(unittest.TestCase):
 
@@ -89,6 +115,54 @@ class TestStrategy(unittest.TestCase):
         self.assertEqual(strategy1['info2'], strategy2['info2'])
 
         self.assertEqual(strategy2['info1'], extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6}))
+
+    def test_compute_weighted_strategy(self):
+        strategies = {
+            'info1': [
+                (1.0, extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6})),
+                (2.0, extensive_game.ActionFloat({'a1': 0.5, 'a2': 0.5}))
+            ],
+            'info2': [
+                (3.0, extensive_game.ActionFloat({'a1': 0.6, 'a2': 0.4})),
+                (2.0, extensive_game.ActionFloat({'a1': 0.3, 'a2': 0.7})),
+                (1.0, extensive_game.ActionFloat({'a1': 0.0, 'a2': 1.0}))
+            ]
+        }
+
+        expected = extensive_game.Strategy({
+            'info1': extensive_game.ActionFloat({
+                'a1': (1.0 * 0.4 + 2.0 * 0.5) / (1.0 + 2.0),
+                'a2': (1.0 * 0.6 + 2.0 * 0.5) / (1.0 + 2.0)
+            }),
+            'info2': extensive_game.ActionFloat({
+                'a1': (3.0 * 0.6 + 2.0 * 0.3 + 1.0 * 0.0) / (3.0 + 2.0 + 1.0),
+                'a2': (3.0 * 0.4 + 2.0 * 0.7 + 1.0 * 1.0) / (3.0 + 2.0 + 1.0)
+            })
+        })
+        computed = extensive_game.compute_weighted_strategy(strategies)
+
+        self.assertEqual(computed, expected)
+
+    def test_equals(self):
+        strategy1 = extensive_game.Strategy({
+            'info1': extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6}),
+            'info2': extensive_game.ActionFloat({'a2': 0.3, 'a4': 0.7})
+        })
+
+        # Same as strategy1
+        strategy2 = extensive_game.Strategy({
+            'info1': extensive_game.ActionFloat({'a1': 0.4, 'a2': 0.6}),
+            'info2': extensive_game.ActionFloat({'a2': 0.3, 'a4': 0.7})
+        })
+
+        # Different to strategy1
+        strategy3 = extensive_game.Strategy({
+            'info1': extensive_game.ActionFloat({'a1': 0.3, 'a2': 0.7}),
+            'info2': extensive_game.ActionFloat({'a2': 0.3, 'a4': 0.7})
+        })
+
+        self.assertEqual(strategy1, strategy2)
+        self.assertNotEqual(strategy1, strategy3)
 
 
 class TestActionFloat(unittest.TestCase):

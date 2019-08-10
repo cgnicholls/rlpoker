@@ -1,6 +1,6 @@
 import abc
-import random
 from collections import deque
+import typing
 
 import numpy as np
 
@@ -23,6 +23,17 @@ class Buffer:
             replace: bool. Whether to sample with or without replacement.
         """
         indices = list(np.random.choice(self.__len__(), n, replace=replace))
+        return [self.buffer[i] for i in indices]
+
+    def get_elements(self, indices: typing.List[int]) -> typing.List[typing.Any]:
+        """Returns the elements at the given indices in the deque.
+
+        Args:
+            indices: list of ints. The indices of the elements to return.
+
+        Returns:
+            list of the elements at those indices.
+        """
         return [self.buffer[i] for i in indices]
 
     def __len__(self):

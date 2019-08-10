@@ -29,7 +29,7 @@ def compute_regret_matching(action_regrets: ActionFloat):
     """
     # If no regrets are positive, just return the uniform probability distribution on available actions.
     if max([v for k, v in action_regrets.items()]) <= 0.0:
-        return ActionFloat.initialise_uniform(action_regrets.action_list())
+        return ActionFloat.initialise_uniform(action_regrets.action_list)
     else:
         # Otherwise take the positive part of each regret (i.e. the maximum of the regret and zero),
         # and play actions with probability proportional to positive regret.

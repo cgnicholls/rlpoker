@@ -10,17 +10,36 @@ from rlpoker.tests import util
 
 class TestDeepRegretNetwork(unittest.TestCase):
 
+    def setUp(self):
+        tf.reset_default_graph()
+
     def test_initialise(self):
 
         action_indexer = neural_game.ActionIndexer(['a', 'b'])
-        network = deep_cfr.DeepRegretNetwork(state_dim=5, action_indexer=action_indexer, player=1)
+        network = deep_cfr.DeepRegretNetwork(state_shape=(5,), action_indexer=action_indexer, player=1)
 
         with tf.Session() as sess:
-            network.initialise(sess)
+            network.set_sess(sess)
+            network.initialise()
 
-            computed = network.predict_advantages(sess, np.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+            # Check we can predict
+            network.predict_advantages(np.array([1.0, 2.0, 3.0, 4.0, 5.0]), action_indexer)
 
-            self.assertEqual(computed.shape, (1, 2))
+    def test_predict_advantages(self):
+        info_set_vector = np.array([1, 2, 3, 4, 5]).astype(np.float32)
+        action_indexer = neural_game.ActionIndexer(['a', 'b'])
+
+        network = deep_cfr.DeepRegretNetwork(state_shape=(5,), action_indexer=action_indexer, player=1)
+
+        with tf.Session() as sess:
+            network.set_sess(sess)
+            network.initialise()
+
+            computed = network.predict_advantages(info_set_vector, action_indexer)
+
+            self.assertEqual(set(computed.keys()), {'a', 'b'})
+            self.assertTrue(type(computed['a']) == np.float32)
+            self.assertTrue(type(computed['b']) == np.float32)
 
 
 class TestDeepCFR(unittest.TestCase):
