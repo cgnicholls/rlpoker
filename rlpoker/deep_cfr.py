@@ -64,13 +64,15 @@ class RegretPredictor:
 
     def train(self, batch: typing.List[AdvantageMemoryElement],
               action_indexer: neural_game.ActionIndexer,
-              info_set_vectoriser: neural_game.InfoSetVectoriser):
+              info_set_vectoriser: neural_game.InfoSetVectoriser,
+              current_time: int):
         """Train on one batch of AdvantageMemoryElements.
 
         Args:
             batch: list of AdvantageMemoryElement objects.
             action_indexer: ActionIndexer. Turns actions into indices.
             info_set_vectoriser: InfoSetVectoriser. Turns info set ids into vectors.
+            current_time: int. The current iteration we are training on.
 
         Returns:
             loss: float.
@@ -111,16 +113,18 @@ class DeepRegretNetwork(RegretPredictor):
 
             # For now, we flatten so that we can accept any state shape.
             hidden = tf.layers.flatten(input_layer, name='flatten')
-            hidden = tf.layers.dense(hidden, 3, activation=tf.nn.relu)
+            hidden = tf.layers.dense(hidden, 16, activation=tf.nn.relu)
+            hidden = tf.layers.dense(hidden, 16, activation=tf.nn.relu)
 
             advantages = tf.layers.dense(hidden, action_dim)
 
             info_set_advantages = tf.placeholder(tf.float32, shape=(None, action_dim), name='info_set_advantages')
             times = tf.placeholder(tf.float32, shape=(None, 1), name='times')
+            current_time = tf.placeholder(tf.float32, shape=(), name='current_time')
 
             regrets = tf.reduce_sum((info_set_advantages - advantages)**2, axis=1, name='regrets')
 
-            loss = tf.reduce_mean(times * regrets)
+            loss = tf.reduce_mean(times * regrets) / current_time
 
             train_op = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(loss)
 
@@ -130,6 +134,7 @@ class DeepRegretNetwork(RegretPredictor):
             'train_op': train_op,
             'loss': loss,
             'times': times,
+            'current_time': current_time,
             'info_set_advantages': info_set_advantages
         }
 
@@ -152,13 +157,15 @@ class DeepRegretNetwork(RegretPredictor):
 
     def train(self, batch: typing.List[AdvantageMemoryElement],
               action_indexer: neural_game.ActionIndexer,
-              info_set_vectoriser: neural_game.InfoSetVectoriser):
+              info_set_vectoriser: neural_game.InfoSetVectoriser,
+              current_time: int):
         """Train on one batch of AdvantageMemoryElements.
 
         Args:
             batch: list of AdvantageMemoryElement objects.
             action_indexer: ActionIndexer. Turns actions into indices.
             info_set_vectoriser: InfoSetVectoriser. Turns info set ids into vectors.
+            current_time: int. The current iteration we are training on.
 
         Returns:
             loss: float.
@@ -172,6 +179,7 @@ class DeepRegretNetwork(RegretPredictor):
         _, computed_loss = self.sess.run([self.tensors['train_op'], self.tensors['loss']], feed_dict={
             self.tensors['input_layer']: np.array(info_set_vectors),
             self.tensors['times']: np.array(times).reshape(-1, 1),
+            self.tensors['current_time']: current_time,
             self.tensors['info_set_advantages']: np.array(info_set_advantages).reshape(-1, action_indexer.action_dim)
         })
 
@@ -199,6 +207,7 @@ def info_set_advantages_to_vector(action_indexer: neural_game.ActionIndexer,
 def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir,
                   action_indexer: neural_game.ActionIndexer,
                   info_set_vectoriser: neural_game.InfoSetVectoriser,
+                  current_time: int,
                   batch_size=1024, num_epochs=20):
     """Trains the given network from scratch
 
@@ -230,7 +239,7 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
             end_idx = min(start_idx + batch_size, len(indices))
             batch = advantage_memory.get_elements(indices[start_idx:end_idx])
 
-            loss = network.train(batch, action_indexer, info_set_vectoriser)
+            loss = network.train(batch, action_indexer, info_set_vectoriser, current_time=current_time)
             epoch_losses.append(loss)
             start_idx += batch_size
 
@@ -307,7 +316,7 @@ def deep_cfr(n_game: neural_game.NeuralGame,
                 network.initialise()
                 advantage_memory = advantage_memory1 if player == 1 else advantage_memory2
                 mean_loss = train_network(network, advantage_memory, action_indexer, info_set_vectoriser,
-                                          batch_size, num_epochs)
+                                          t, batch_size, num_epochs)
 
                 print("Mean loss: {}".format(mean_loss))
 
@@ -333,6 +342,11 @@ def deep_cfr(n_game: neural_game.NeuralGame,
             #     )
             # print("----------------")
             #
+
+            print("Advantage memory 1 length: {}".format(len(advantage_memory1)))
+            print("Advantage memory 2 length: {}".format(len(advantage_memory2)))
+            print("Strategy memory length: {}".format(len(strategy_memory)))
+
             mean_strategy = compute_mean_strategy(strategy_memory)
             # print("Strategy summary")
             # print(mean_strategy)

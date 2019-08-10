@@ -4,13 +4,10 @@ import argparse
 
 from rlpoker.cfr import cfr, save_strategy, load_strategy
 from rlpoker.games.leduc import Leduc
-from rlpoker.tests.util import rock_paper_scissors
+from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.games.card import get_deck
 from rlpoker.games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
-
-from rlpoker import deep_cfr
-
 
 if __name__ == "__main__":
     games = ['Leduc', 'OneCardPoker', 'RockPaperScissors']
@@ -41,7 +38,7 @@ if __name__ == "__main__":
 
     elif args.game == 'RockPaperScissors':
         print("Solving rock paper scissors")
-        game, _, _ = rock_paper_scissors()
+        game, _, _ = create_neural_rock_paper_scissors()
 
     strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
         use_chance_sampling=args.use_chance_sampling)

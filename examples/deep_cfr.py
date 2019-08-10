@@ -16,9 +16,9 @@ if __name__ == "__main__":
                         help='The number of iterations to run deep CFR for.')
     parser.add_argument('--num_traversals', default=500, type=int,
                         help='The number of traversals in each iteration.')
-    parser.add_argument('--advantage_maxlen', default=1000000, type=int,
+    parser.add_argument('--advantage_maxlen', default=10000, type=int,
                         help='The maximum length of the advantage memory reservoirs.')
-    parser.add_argument('--strategy_maxlen', default=1000000, type=int,
+    parser.add_argument('--strategy_maxlen', default=10000, type=int,
                         help='The maximum length of the strategy memory reservoir.')
     parser.add_argument('--batch_size', default=100, type=int,
                         help='The batch size to use in training.')
