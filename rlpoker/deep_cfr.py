@@ -60,7 +60,7 @@ class RegretPredictor:
             ActionFloat. The action probabilities in this information set.
         """
         action_advantages = self.predict_advantages(info_set_vector, action_indexer)
-        return cfr.compute_regret_matching(action_advantages)
+        return cfr.compute_regret_matching(action_advantages, highest_regret=True)
 
     def train(self, batch: typing.List[AdvantageMemoryElement],
               action_indexer: neural_game.ActionIndexer,
@@ -358,7 +358,7 @@ def deep_cfr(n_game: neural_game.NeuralGame,
                     game,
                     game.complete_strategy_uniformly(mean_strategy)
                 )
-            print("Exploitability: {}".format(exploitability))
+            print("Exploitability: {} mbb/h".format(exploitability * 1000))
 
     # TODO(chrisn). Train the network on the strategy memory.
     return mean_strategy, exploitability

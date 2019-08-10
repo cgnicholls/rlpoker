@@ -13,7 +13,53 @@ from rlpoker.cfr_game import get_available_actions, get_information_set, \
 from rlpoker.extensive_game import ActionFloat, Strategy
 
 
-def compute_regret_matching(action_regrets: ActionFloat, epsilon=1e-7):
+def compute_average_strategy(action_counts):
+    average_strategy = dict()
+    for information_set in action_counts:
+        num_actions = sum([v for k, v in action_counts[information_set].items()])
+        if num_actions > 0:
+            average_strategy[information_set] = {
+                k: float(v) / float(num_actions) for k, v in
+                action_counts[information_set].items()}
+
+    return average_strategy
+
+
+def compare_strategies(s1: Strategy, s2: Strategy):
+    """Returns the average Euclidean distance between the probability distributions.
+
+    Args:
+        s1: Strategy
+        s2: Strategy
+
+    Returns:
+        float. The average Euclidean distance between the distributions.
+    """
+    common_keys = [k for k in s1.keys() if k in s2.keys()]
+    distances = []
+    for information_set in common_keys:
+        prob_dist_diff = [
+            float(s1[information_set][a] - s2[information_set][a])**2 for a in
+            s1[information_set]]
+        distances.append(np.sqrt(np.mean(prob_dist_diff)))
+    return np.mean(distances)
+
+
+def normalise_probs(probs: ActionFloat, epsilon=1e-7):
+    """Sets the minimum prob to be epsilon, and then normalises by dividing by the sum.
+
+    Args:
+        probs: ActionFloat. Must all be non-negative.
+
+    Returns:
+        norm_probs: ActionFloat.
+    """
+    assert min(probs.values()) >= 0.0
+    probs = {a: max(prob, epsilon) for a, prob in probs.items()}
+    return ActionFloat({a: prob / sum(probs.values()) for a, prob in probs.items()})
+
+
+def compute_regret_matching(action_regrets: ActionFloat, epsilon=1e-7, highest_regret=False):
     """Given regrets r_i for actions a_i, we compute the regret matching strategy as follows.
 
     If sum_i max(0, r_i) > 0:
@@ -24,18 +70,25 @@ def compute_regret_matching(action_regrets: ActionFloat, epsilon=1e-7):
     Args:
         regrets: dict
         epsilon: the minimum probability to return for each action, for numerical stability.
+        highest_regret: if True, then when all regrets are negative, return epsilon for all but the highest regret
+            actions.
 
     Returns:
         ActionFloat. The probability of taking each action in this information set.
     """
     # If no regrets are positive, just return the uniform probability distribution on available actions.
     if max([v for k, v in action_regrets.items()]) <= 0.0:
-        return ActionFloat.initialise_uniform(action_regrets.action_list)
+        if highest_regret:
+            probs = {action: epsilon for action in action_regrets}
+            best_action = max(action_regrets, key=action_regrets.get)
+            probs[best_action] = 1.0
+            return normalise_probs(ActionFloat(probs), epsilon=epsilon)
+        else:
+            return ActionFloat.initialise_uniform(action_regrets.action_list)
     else:
         # Otherwise take the positive part of each regret (i.e. the maximum of the regret and zero),
         # and play actions with probability proportional to positive regret.
-        denominator = sum([max(epsilon, v) for k, v in action_regrets.items()])
-        return ActionFloat({k: max(epsilon, v) / denominator for k, v in action_regrets.items()})
+        return normalise_probs(ActionFloat({k: max(0.0, v) for k, v in action_regrets.items()}), epsilon=epsilon)
 
 
 def cfr(game, num_iters=10000, use_chance_sampling=True):
@@ -89,41 +142,9 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
                 game, completed_strategy)
             exploitabilities.append((t, exploitability))
 
-            print("t: {}, exploitability: {}".format(t, exploitability))
+            print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
 
     return average_strategy, exploitabilities
-
-
-def compute_average_strategy(action_counts):
-    average_strategy = dict()
-    for information_set in action_counts:
-        num_actions = sum([v for k, v in action_counts[information_set].items()])
-        if num_actions > 0:
-            average_strategy[information_set] = {
-                k: float(v) / float(num_actions) for k, v in
-                action_counts[information_set].items()}
-
-    return average_strategy
-
-
-def compare_strategies(s1: Strategy, s2: Strategy):
-    """Returns the average Euclidean distance between the probability distributions.
-
-    Args:
-        s1: Strategy
-        s2: Strategy
-
-    Returns:
-        float. The average Euclidean distance between the distributions.
-    """
-    common_keys = [k for k in s1.keys() if k in s2.keys()]
-    distances = []
-    for information_set in common_keys:
-        prob_dist_diff = [
-            float(s1[information_set][a] - s2[information_set][a])**2 for a in
-            s1[information_set]]
-        distances.append(np.sqrt(np.mean(prob_dist_diff)))
-    return np.mean(distances)
 
 
 # The Game object holds a game state at any point in time, and can return an information set label
