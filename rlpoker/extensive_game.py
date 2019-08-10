@@ -214,12 +214,16 @@ class ExtensiveGameNode:
         self.extra_info = dict()
 
     def __str__(self):
-        return "\n".join(["Player: {}".format(self.player),
-                         "Actions: {}".format(list(self.actions)),
-                         "Hidden from: {}".format(self.hidden_from),
-                         "Utility: {}".format(self.utility),
-                         "Chance probs: {}".format(self.chance_probs),
-                         "Action list: {}".format(self.action_list)])
+        return "\n".join([
+            "Node(",
+            "Player: {}".format(self.player),
+            "Actions: {}".format(list(self.actions)),
+            "Hidden from: {}".format(self.hidden_from),
+            "Utility: {}".format(self.utility),
+            "Chance probs: {}".format(self.chance_probs),
+            "Action list: {}".format(self.action_list),
+            ")"
+        ])
 
     @property
     def actions(self):

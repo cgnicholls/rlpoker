@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 
 import rlpoker.util as util
+from rlpoker.games import card
 
 
 class TestUtil(unittest.TestCase):
@@ -28,3 +29,18 @@ class TestUtil(unittest.TestCase):
         ]
 
         self.assertEqual(actions, expected_actions)
+
+        # Test we can sample an arbitrary object
+        strategy = {'a': 0.2, 'b': 0.8}
+        computed = util.sample_action(strategy)
+        self.assertTrue(computed in strategy)
+
+        strategy = {card.Card(3, 4): 0.2, card.Card(2, 2): 0.8}
+        computed = util.sample_action(strategy)
+        self.assertTrue(computed in strategy)
+
+        # Check that we don't sample an unavailable action
+        strategy = {1: 0.2, 2: 0.8}
+        np.random.seed(0)
+        actions = [util.sample_action(strategy, available_actions=[1]) for i in range(1000)]
+        self.assertEqual(set(actions), {1})

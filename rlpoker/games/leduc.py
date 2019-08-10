@@ -8,6 +8,7 @@ from collections import deque, Counter
 from rlpoker.extensive_game import ExtensiveGame, ExtensiveGameNode
 from rlpoker.games.card import Card
 from rlpoker.nfsp_game import NFSPGame
+from rlpoker import neural_game
 
 
 class Leduc(ExtensiveGame):
@@ -480,3 +481,18 @@ def one_hot_encoding(dim, i):
     x = np.zeros(dim, dtype=float)
     x[i] = 1.0
     return x
+
+
+def create_neural_leduc(cards, max_raises=4, raise_amount=2):
+    game = Leduc(cards, max_raises=max_raises, raise_amount=raise_amount)
+
+    action_indexer = neural_game.ActionIndexer([0, 1, 2])
+
+    # Now compute the state vectors. We first define a one-hot-encoding based on the cards.
+    card_indices = dict(enumerate(cards))
+    card_indices = {v: k for k, v in card_indices.items()}
+    state_vectors = compute_state_vectors(game.info_set_ids.values(), card_indices, max_raises)
+
+    info_set_vectoriser = neural_game.InfoSetVectoriser(state_vectors)
+
+    return neural_game.NeuralGame(game, action_indexer, info_set_vectoriser)

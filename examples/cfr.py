@@ -31,8 +31,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.game == 'Leduc':
-        print("Solving Leduc Hold Em with {} iterations".format(
-            args.num_iters))
+        print("Solving Leduc Hold Em with {} iterations".format(args.num_iters))
         cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
         game = Leduc(cards)
 

@@ -1,16 +1,15 @@
 import argparse
 
 from rlpoker import deep_cfr
-from rlpoker.games.leduc import Leduc
-from rlpoker.games.card import get_deck
-from rlpoker.games.one_card_poker import OneCardPoker
+from rlpoker.games import leduc, rock_paper_scissors, one_card_poker
+from rlpoker.games import card
+from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.best_response import compute_exploitability
 
-from rlpoker.tests.util import rock_paper_scissors
 
 
 if __name__ == "__main__":
-    games = ['Leduc', 'OneCardPoker']
+    games = ['Leduc', 'RockPaperScissors']
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_iters', default=100, type=int,
@@ -25,13 +24,24 @@ if __name__ == "__main__":
                         help='The batch size to use in training.')
     parser.add_argument('--num_epochs', default=100, type=int,
                         help='The number of epochs to use in training.')
+    parser.add_argument('--game', default='RockPaperScissors', choices=games,
+                        help='The game to play')
+
+    parser.add_argument('--num_values', default=3, type=int,
+                        help='In OneCardPoker or Leduc, pass the number of cards to use.')
+    parser.add_argument('--num_suits', default=2, type=int,
+                        help='In Leduc, pass the number of suits to use.')
 
     args = parser.parse_args()
 
-    print("Solving rock paper scissors")
-    game, action_indexer, info_set_vectoriser = rock_paper_scissors()
+    if args.game == 'Leduc':
+        cards = card.get_deck(num_values=args.num_values, num_suits=args.num_suits)
+        n_game = leduc.create_neural_leduc(cards)
+    elif args.game == 'RockPaperScissors':
+        print("Solving rock paper scissors")
+        n_game = rock_paper_scissors.create_neural_rock_paper_scissors()
 
-    strategy, exploitabilities = deep_cfr.deep_cfr(game, action_indexer, info_set_vectoriser,
+    strategy, exploitabilities = deep_cfr.deep_cfr(n_game,
                                                    num_iters=args.num_iters, num_traversals=args.num_traversals,
                                                    advantage_maxlen=args.advantage_maxlen,
                                                    strategy_maxlen=args.strategy_maxlen,

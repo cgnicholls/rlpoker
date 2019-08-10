@@ -6,13 +6,13 @@ import numpy as np
 from rlpoker import extensive_game, neural_game
 
 
-def rock_paper_scissors() -> typing.Tuple[extensive_game.ExtensiveGame,
-                                          neural_game.ActionIndexer,
-                                          neural_game.InfoSetVectoriser]:
+def create_neural_rock_paper_scissors() -> typing.Tuple[extensive_game.ExtensiveGame,
+                                                        neural_game.ActionIndexer,
+                                                        neural_game.InfoSetVectoriser]:
     """Returns a rock paper scissors game, ActionIndexer and InfoStateVectoriser.
 
     Returns:
-        ExtensiveGame, ActionIndexer, InfoStateVectoriser
+        NeuralGame
     """
     # Define rock, paper scissors.
     root = extensive_game.ExtensiveGameNode(1, action_list=(), hidden_from={2})
@@ -57,4 +57,4 @@ def rock_paper_scissors() -> typing.Tuple[extensive_game.ExtensiveGame,
     }
     info_set_vectoriser = neural_game.InfoSetVectoriser(vectors)
 
-    return game, action_indexer, info_set_vectoriser
+    return neural_game.NeuralGame(game, action_indexer, info_set_vectoriser)

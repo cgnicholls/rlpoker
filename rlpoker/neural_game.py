@@ -1,7 +1,13 @@
 
+import collections
 import typing
 
 import numpy as np
+
+
+NeuralGame = collections.namedtuple('NeuralGame', [
+    'extensive_game', 'action_indexer', 'info_set_vectoriser'
+])
 
 
 class ActionIndexer:

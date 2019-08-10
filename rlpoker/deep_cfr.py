@@ -258,16 +258,13 @@ def compute_mean_strategy(strategy_memory: buffer.Reservoir):
     return extensive_game.compute_weighted_strategy(strategies)
 
 
-def deep_cfr(game: extensive_game.ExtensiveGame, action_indexer: neural_game.ActionIndexer,
-             info_set_vectoriser: neural_game.InfoSetVectoriser,
+def deep_cfr(n_game: neural_game.NeuralGame,
              num_iters: int=100, num_traversals: int=10000,
              advantage_maxlen: int=1000000, strategy_maxlen: int=1000000,
              batch_size: int=1024, num_epochs: int=100):
     """
     Args:
-        game: ExtensiveGame.
-        action_indexer: ActionIndexer. Makes the game usable by a neural network.
-        info_set_vectoriser: InfoSetVectoriser. Makes the game usable by a neural network.
+        n_game: NeuralGame.
         num_iters: int. The number of iterations to run deep CFR for.
         num_traversals: int. The number of traversals per CFR iteration.
         advantage_maxlen: int. The maximum length of the advantage memories.
@@ -278,6 +275,7 @@ def deep_cfr(game: extensive_game.ExtensiveGame, action_indexer: neural_game.Act
     Returns:
         strategy, exploitability.
     """
+    game, action_indexer, info_set_vectoriser = n_game
 
     advantage_memory1 = buffer.Reservoir(maxlen=advantage_maxlen)
     advantage_memory2 = buffer.Reservoir(maxlen=advantage_maxlen)
@@ -344,6 +342,9 @@ def deep_cfr(game: extensive_game.ExtensiveGame, action_indexer: neural_game.Act
             else:
                 print("Strategy not complete!")
 
+    # TODO(chrisn). Train the network on the strategy memory.
+    return mean_strategy, exploitability
+
 
 def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game.ActionIndexer,
                  info_set_vectoriser: neural_game.InfoSetVectoriser,
@@ -369,7 +370,10 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
     Returns:
 
     """
+    print("Node")
+    print(node)
     if is_terminal(node):
+        print("Payoffs: {}".format(payoffs(node)))
         return payoffs(node)[player]
     elif which_player(node) == 0:
         # Chance player
@@ -386,6 +390,8 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
             values[action] = cfr_traverse(game, action_indexer, info_set_vectoriser, child, player,
                                           network1, network2,
                                           advantage_memory1, advantage_memory2, strategy_memory, t)
+            print("values[action]: {}".format(values[action]))
+            assert values[action] is not None, print("Shouldn't be None! node was: {}".format(node))
         info_set_regrets = dict()
 
         # Compute the player's strategy
@@ -403,6 +409,10 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
         info_set_id = game.info_set_ids[node]
         advantage_memory = advantage_memory1 if player == 1 else advantage_memory2
         advantage_memory.append(AdvantageMemoryElement(info_set_id, t, info_set_regrets))
+
+        # In traverser infosets, the value passed back up is the weighted average of all action values,
+        # where action a’s weight is info_set_strategy[a]
+        return average_regret
     else:
         # It's the other player's turn.
         state_vector = info_set_vectoriser.get_vector(game.get_info_set_id(node))
@@ -419,6 +429,8 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
         info_set_id = game.info_set_ids[node]
         strategy_memory.append(StrategyMemoryElement(info_set_id, t, info_set_strategy))
 
-        action = sample_action(info_set_strategy)
+        action = sample_action(info_set_strategy, available_actions=get_available_actions(node))
         return cfr_traverse(game, action_indexer, info_set_vectoriser, node.children[action], player,
                             network1, network2, advantage_memory1, advantage_memory2, strategy_memory, t)
+
+    print("AAARGH: {}".format(node))

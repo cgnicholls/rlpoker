@@ -1,14 +1,14 @@
 import unittest
 
 from rlpoker import extensive_game
-from rlpoker.games.rock_paper_scissors import rock_paper_scissors
+from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 
 
 class TestExtensiveGame(unittest.TestCase):
 
     def test_expected_value_exact(self):
 
-        game, _, _ = rock_paper_scissors()
+        game, _, _ = create_neural_rock_paper_scissors()
 
         strategy1 = extensive_game.Strategy({
             game.info_set_ids[game.get_node(())]: extensive_game.ActionFloat({
@@ -36,7 +36,7 @@ class TestExtensiveGame(unittest.TestCase):
         self.assertEqual(computed2, -expected1)
 
     def test_get_node(self):
-        game, _, _ = rock_paper_scissors()
+        game, _, _ = create_neural_rock_paper_scissors()
 
         # Check we can get the root node
         node = game.get_node(actions=())
@@ -55,7 +55,7 @@ class TestExtensiveGame(unittest.TestCase):
         self.assertEqual(node, None)
 
     def test_is_strategy_complete(self):
-        game, _, _ = rock_paper_scissors()
+        game, _, _ = create_neural_rock_paper_scissors()
 
         # Incomplete because missing an information set.
         strategy = extensive_game.Strategy({
