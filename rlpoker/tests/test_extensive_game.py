@@ -1,7 +1,7 @@
 import unittest
 
 from rlpoker import extensive_game
-from rlpoker.tests.util import rock_paper_scissors
+from rlpoker.games.rock_paper_scissors import rock_paper_scissors
 
 
 class TestExtensiveGame(unittest.TestCase):

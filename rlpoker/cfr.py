@@ -67,7 +67,6 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
     exploitabilities = []
 
     # Each information set is uniquely identified with an action tuple.
-    values = {1: [], 2: []}
     for t in range(num_iters):
         for i in [1, 2]:
             cfr_recursive(game, game.root, i, t, 1.0, 1.0, 1.0, regrets,

@@ -4,6 +4,7 @@ import argparse
 
 from rlpoker.cfr import cfr, save_strategy, load_strategy
 from rlpoker.games.leduc import Leduc
+from rlpoker.tests.util import rock_paper_scissors
 from rlpoker.games.card import get_deck
 from rlpoker.games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
@@ -12,13 +13,12 @@ from rlpoker import deep_cfr
 
 
 if __name__ == "__main__":
-    games = ['Leduc', 'OneCardPoker']
+    games = ['Leduc', 'OneCardPoker', 'RockPaperScissors']
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_iters', default=10000, type=int,
                         help='The number of iterations to run CFR for.')
-    parser.add_argument('--game', default='Leduc', type=str,
-                        choices=games,
+    parser.add_argument('--game', default='Leduc', type=str, choices=games,
                         help='The game to run CFR on.')
     parser.add_argument('--num_values', default=3, type=int,
                         help='In OneCardPoker or Leduc, pass the number of '
@@ -40,10 +40,12 @@ if __name__ == "__main__":
         print("Solving One Card Poker")
         game = OneCardPoker.create_game(args.num_values)
 
+    elif args.game == 'RockPaperScissors':
+        print("Solving rock paper scissors")
+        game, _, _ = rock_paper_scissors()
+
     strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
         use_chance_sampling=args.use_chance_sampling)
-
-    deep_cfr.deep_cfr(game)
 
     # Save the strategy and plot the performance.
 

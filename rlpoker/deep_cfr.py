@@ -54,6 +54,7 @@ class RegretPredictor:
 
         Args:
             info_set_vector: ndarray.
+            action_indexer: ActionIndexer.
 
         Returns:
             ActionFloat. The action probabilities in this information set.
@@ -110,7 +111,7 @@ class DeepRegretNetwork(RegretPredictor):
 
             # For now, we flatten so that we can accept any state shape.
             hidden = tf.layers.flatten(input_layer, name='flatten')
-            hidden = tf.layers.dense(hidden, 64, activation=tf.nn.relu)
+            hidden = tf.layers.dense(hidden, 3, activation=tf.nn.relu)
 
             advantages = tf.layers.dense(hidden, action_dim)
 
@@ -121,7 +122,7 @@ class DeepRegretNetwork(RegretPredictor):
 
             loss = tf.reduce_mean(times * regrets)
 
-            train_op = tf.train.AdamOptimizer().minimize(loss)
+            train_op = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(loss)
 
         tensors = {
             'input_layer': input_layer,
@@ -312,6 +313,28 @@ def deep_cfr(game: extensive_game.ExtensiveGame, action_indexer: neural_game.Act
 
                 print("Mean loss: {}".format(mean_loss))
 
+            print("################")
+
+            print("----------------")
+            print("Advantage memory 1:")
+            print(advantage_memory1.buffer)
+            print("----------------")
+            print("Advantage memory 2:")
+            print(advantage_memory2.buffer)
+            print("----------------")
+
+            print("################")
+
+
+            print("----------------")
+            print("Predicted advantages:")
+            for info_set_id in set(game.info_set_ids.values()):
+                print("{}: {}".format(
+                    info_set_id,
+                    network.predict_advantages(info_set_vectoriser.get_vector(info_set_id), action_indexer))
+                )
+            print("----------------")
+
             print("Strategy summary")
             mean_strategy = compute_mean_strategy(strategy_memory)
             print(mean_strategy)
@@ -367,8 +390,13 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
 
         # Compute the player's strategy
         network = network1 if player == 1 else network2
-        strategy = network.compute_action_probs(state_vector, action_indexer)
-        average_regret = sum([strategy[action] * values[action] for action in get_available_actions(node)])
+        if t == 1:
+            # This is the equivalent of initialising the network so it starts with all zeroes.
+            info_set_strategy = extensive_game.ActionFloat.initialise_uniform(action_indexer.actions)
+        else:
+            info_set_strategy = network.compute_action_probs(state_vector, action_indexer)
+
+        average_regret = sum([info_set_strategy[action] * values[action] for action in get_available_actions(node)])
         for action in get_available_actions(node):
             info_set_regrets[action] = values[action] - average_regret
 
@@ -382,7 +410,11 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
         # Compute the other player's strategy
         other_player = 1 if player == 2 else 2
         network = network1 if other_player == 1 else network2
-        info_set_strategy = network.compute_action_probs(state_vector, action_indexer)
+        if t == 1:
+            # This is the equivalent of initialising the network so it starts with all zeroes.
+            info_set_strategy = extensive_game.ActionFloat.initialise_uniform(action_indexer.actions)
+        else:
+            info_set_strategy = network.compute_action_probs(state_vector, action_indexer)
 
         info_set_id = game.info_set_ids[node]
         strategy_memory.append(StrategyMemoryElement(info_set_id, t, info_set_strategy))

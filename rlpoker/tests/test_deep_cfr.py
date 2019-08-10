@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from rlpoker import deep_cfr, neural_game, extensive_game, buffer
-from rlpoker.tests import util
+from rlpoker.games.rock_paper_scissors import rock_paper_scissors
 
 class TestDeepRegretNetwork(unittest.TestCase):
 
@@ -45,7 +45,7 @@ class TestDeepRegretNetwork(unittest.TestCase):
 class TestDeepCFR(unittest.TestCase):
 
     def test_cfr_traverse_advantage_memory(self):
-        game, action_indexer, info_set_vectoriser = util.rock_paper_scissors()
+        game, action_indexer, info_set_vectoriser = rock_paper_scissors()
 
         node = game.root
         player = 1
@@ -85,7 +85,7 @@ class TestDeepCFR(unittest.TestCase):
         self.assertEqual(len(strategy_memory), 3)
 
     def test_cfr_traverse_advantage_memory_player2(self):
-        game, action_indexer, info_set_vectoriser = util.rock_paper_scissors()
+        game, action_indexer, info_set_vectoriser = rock_paper_scissors()
         game.print_tree()
 
         node = game.root.children['R']
