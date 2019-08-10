@@ -13,7 +13,7 @@ from rlpoker.cfr_game import get_available_actions, get_information_set, \
 from rlpoker.extensive_game import ActionFloat, Strategy
 
 
-def compute_regret_matching(action_regrets: ActionFloat):
+def compute_regret_matching(action_regrets: ActionFloat, epsilon=1e-7):
     """Given regrets r_i for actions a_i, we compute the regret matching strategy as follows.
 
     If sum_i max(0, r_i) > 0:
@@ -23,6 +23,7 @@ def compute_regret_matching(action_regrets: ActionFloat):
 
     Args:
         regrets: dict
+        epsilon: the minimum probability to return for each action, for numerical stability.
 
     Returns:
         ActionFloat. The probability of taking each action in this information set.
@@ -33,8 +34,8 @@ def compute_regret_matching(action_regrets: ActionFloat):
     else:
         # Otherwise take the positive part of each regret (i.e. the maximum of the regret and zero),
         # and play actions with probability proportional to positive regret.
-        denominator = sum([max(0.0, v) for k, v in action_regrets.items()])
-        return ActionFloat({k: max(0.0, v) / denominator for k, v in action_regrets.items()})
+        denominator = sum([max(epsilon, v) for k, v in action_regrets.items()])
+        return ActionFloat({k: max(epsilon, v) / denominator for k, v in action_regrets.items()})
 
 
 def cfr(game, num_iters=10000, use_chance_sampling=True):

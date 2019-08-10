@@ -311,36 +311,40 @@ def deep_cfr(n_game: neural_game.NeuralGame,
 
                 print("Mean loss: {}".format(mean_loss))
 
-            print("################")
+            # print("################")
+            #
+            # print("----------------")
+            # print("Advantage memory 1:")
+            # print(advantage_memory1.buffer)
+            # print("----------------")
+            # print("Advantage memory 2:")
+            # print(advantage_memory2.buffer)
+            # print("----------------")
+            #
+            # print("################")
+            #
 
-            print("----------------")
-            print("Advantage memory 1:")
-            print(advantage_memory1.buffer)
-            print("----------------")
-            print("Advantage memory 2:")
-            print(advantage_memory2.buffer)
-            print("----------------")
-
-            print("################")
-
-
-            print("----------------")
-            print("Predicted advantages:")
-            for info_set_id in set(game.info_set_ids.values()):
-                print("{}: {}".format(
-                    info_set_id,
-                    network.predict_advantages(info_set_vectoriser.get_vector(info_set_id), action_indexer))
-                )
-            print("----------------")
-
-            print("Strategy summary")
+            # print("----------------")
+            # print("Predicted advantages:")
+            # for info_set_id in set(game.info_set_ids.values()):
+            #     print("{}: {}".format(
+            #         info_set_id,
+            #         network.predict_advantages(info_set_vectoriser.get_vector(info_set_id), action_indexer))
+            #     )
+            # print("----------------")
+            #
             mean_strategy = compute_mean_strategy(strategy_memory)
-            print(mean_strategy)
+            # print("Strategy summary")
+            # print(mean_strategy)
             if game.is_strategy_complete(mean_strategy):
                 exploitability = best_response.compute_exploitability(game, mean_strategy)
-                print("Exploitability: {}".format(exploitability))
             else:
-                print("Strategy not complete!")
+                print("Strategy not complete, filling uniformly.")
+                exploitability = best_response.compute_exploitability(
+                    game,
+                    game.complete_strategy_uniformly(mean_strategy)
+                )
+            print("Exploitability: {}".format(exploitability))
 
     # TODO(chrisn). Train the network on the strategy memory.
     return mean_strategy, exploitability
@@ -370,10 +374,7 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
     Returns:
 
     """
-    print("Node")
-    print(node)
     if is_terminal(node):
-        print("Payoffs: {}".format(payoffs(node)))
         return payoffs(node)[player]
     elif which_player(node) == 0:
         # Chance player
@@ -390,7 +391,6 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
             values[action] = cfr_traverse(game, action_indexer, info_set_vectoriser, child, player,
                                           network1, network2,
                                           advantage_memory1, advantage_memory2, strategy_memory, t)
-            print("values[action]: {}".format(values[action]))
             assert values[action] is not None, print("Shouldn't be None! node was: {}".format(node))
         info_set_regrets = dict()
 
@@ -432,5 +432,3 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
         action = sample_action(info_set_strategy, available_actions=get_available_actions(node))
         return cfr_traverse(game, action_indexer, info_set_vectoriser, node.children[action], player,
                             network1, network2, advantage_memory1, advantage_memory2, strategy_memory, t)
-
-    print("AAARGH: {}".format(node))

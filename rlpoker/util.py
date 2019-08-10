@@ -37,6 +37,8 @@ def sample_action(strategy, available_actions: typing.Union[None, typing.List]=N
         actions = [a for a in actions if a in available_actions]
     probs = np.array([strategy[a] for a in actions])
 
+    assert np.sum(probs) > 0.0, print("Oops: {}, {}".format(probs, actions))
+
     probs = probs / np.sum(probs)
 
     idx = np.random.choice(list(range(len(actions))), p=probs)
