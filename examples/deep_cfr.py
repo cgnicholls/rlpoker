@@ -14,15 +14,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_iters', default=100, type=int,
                         help='The number of iterations to run deep CFR for.')
-    parser.add_argument('--num_traversals', default=500, type=int,
+    parser.add_argument('--num_traversals', default=10000, type=int,
                         help='The number of traversals in each iteration.')
-    parser.add_argument('--advantage_maxlen', default=10000, type=int,
+    parser.add_argument('--advantage_maxlen', default=1000000, type=int,
                         help='The maximum length of the advantage memory reservoirs.')
-    parser.add_argument('--strategy_maxlen', default=10000, type=int,
+    parser.add_argument('--strategy_maxlen', default=1000000, type=int,
                         help='The maximum length of the strategy memory reservoir.')
-    parser.add_argument('--batch_size', default=100, type=int,
+    parser.add_argument('--batch_size', default=10000, type=int,
                         help='The batch size to use in training.')
-    parser.add_argument('--num_epochs', default=100, type=int,
+    parser.add_argument('--num_sgd_updates', default=4000, type=int,
                         help='The number of epochs to use in training.')
     parser.add_argument('--game', default='RockPaperScissors', choices=games,
                         help='The game to play')
@@ -46,7 +46,7 @@ if __name__ == "__main__":
                                                    advantage_maxlen=args.advantage_maxlen,
                                                    strategy_maxlen=args.strategy_maxlen,
                                                    batch_size=args.batch_size,
-                                                   num_epochs=args.num_epochs)
+                                                   num_sgd_updates=args.num_sgd_updates)
 
-    exploitability = compute_exploitability(game, strategy)
+    exploitability = compute_exploitability(n_game.extensive_game, strategy)
     print("Exploitability of strategy: {}".format(exploitability))

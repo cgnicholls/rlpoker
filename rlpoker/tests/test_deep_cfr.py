@@ -143,3 +143,23 @@ class TestDeepCFR(unittest.TestCase):
         })
         print("Expected: {}".format(expected))
         self.assertEqual(advantage, expected)
+
+
+class TestEarlyStopping(unittest.TestCase):
+
+    def test_early_stopping(self):
+        losses = [1.0, 2.0, 3.0]
+        self.assertTrue(deep_cfr.early_stopping(losses, consecutive_increases=1))
+        self.assertTrue(deep_cfr.early_stopping(losses, consecutive_increases=2))
+        self.assertFalse(deep_cfr.early_stopping(losses, consecutive_increases=3))
+
+        losses = [3.0, 2.0, 1.0, 0.0]
+        self.assertFalse(deep_cfr.early_stopping(losses, consecutive_increases=1))
+        self.assertFalse(deep_cfr.early_stopping(losses, consecutive_increases=2))
+        self.assertFalse(deep_cfr.early_stopping(losses, consecutive_increases=3))
+
+        losses = [3.0, 2.0, 1.0, 0.0, 1.0, 2.0, 3.0]
+        self.assertTrue(deep_cfr.early_stopping(losses, consecutive_increases=1))
+        self.assertTrue(deep_cfr.early_stopping(losses, consecutive_increases=2))
+        self.assertTrue(deep_cfr.early_stopping(losses, consecutive_increases=3))
+        self.assertFalse(deep_cfr.early_stopping(losses, consecutive_increases=4))

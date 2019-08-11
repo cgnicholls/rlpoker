@@ -107,14 +107,14 @@ class DeepRegretNetwork(RegretPredictor):
         self.sess.run(self.init_op)
 
     @staticmethod
-    def build(state_shape, action_dim, scope):
+    def build(state_shape, action_dim, scope, hidden_dim=64):
         with tf.variable_scope(scope):
             input_layer = tf.placeholder(tf.float32, shape=(None,) + state_shape, name='state')
 
             # For now, we flatten so that we can accept any state shape.
             hidden = tf.layers.flatten(input_layer, name='flatten')
-            hidden = tf.layers.dense(hidden, 16, activation=tf.nn.relu)
-            hidden = tf.layers.dense(hidden, 16, activation=tf.nn.relu)
+            hidden = tf.layers.dense(hidden, hidden_dim, activation=tf.nn.relu)
+            hidden = tf.layers.dense(hidden, hidden_dim, activation=tf.nn.relu)
 
             advantages = tf.layers.dense(hidden, action_dim)
 
@@ -204,11 +204,29 @@ def info_set_advantages_to_vector(action_indexer: neural_game.ActionIndexer,
     return advantages
 
 
+def early_stopping(losses: typing.List[float], consecutive_increases: int=2):
+    """Returns True if and only if losses[-consecutive_increases-1:] is monotonically increasing.
+
+    Args:
+        losses: list of floats. The losses.
+        consecutive_increases: int. The number of consecutive increases to see before early stopping.
+
+    Returns:
+        early_stop: bool. True if and only if we should early stop.
+    """
+    # Can't early stop before we see enough losses.
+    if len(losses) <= consecutive_increases:
+        return False
+
+    relevant_losses = losses[-consecutive_increases-1:]
+    return sorted(relevant_losses) == relevant_losses
+
+
 def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir,
                   action_indexer: neural_game.ActionIndexer,
                   info_set_vectoriser: neural_game.InfoSetVectoriser,
                   current_time: int,
-                  batch_size=1024, num_epochs=20):
+                  batch_size=1024, num_sgd_updates=4000):
     """Trains the given network from scratch
 
     Args:
@@ -217,7 +235,7 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
         action_indexer: ActionIndexer. Turns actions into indices.
         info_set_vectoriser: InfoSetVectoriser. Turns information set ids into vectors.
         batch_size: int. The size to use for each batch.
-        num_epochs: int. The number of passes through the full advantage memory.
+        num_sgd_updates: int. The number of sgd updates to do.
 
     Returns:
         mean_loss: float. The mean loss over the period.
@@ -228,27 +246,27 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
     losses = []
 
     print("Training.")
-    for i_epoch in tqdm(range(num_epochs)):
+    indices = list(range(len(advantage_memory)))
+    for i in tqdm(range(num_sgd_updates)):
         # Shuffle the advantage memory.
-        indices = list(range(len(advantage_memory)))
-        np.random.shuffle(indices)
-        start_idx = 0
+        batch_indices = np.random.choice(indices, batch_size, replace=True)
 
-        epoch_losses = []
-        while start_idx + batch_size <= len(indices):
-            end_idx = min(start_idx + batch_size, len(indices))
-            batch = advantage_memory.get_elements(indices[start_idx:end_idx])
+        batch = advantage_memory.get_elements(batch_indices)
 
-            loss = network.train(batch, action_indexer, info_set_vectoriser, current_time=current_time)
-            epoch_losses.append(loss)
-            start_idx += batch_size
+        loss = network.train(batch, action_indexer, info_set_vectoriser, current_time=current_time)
+        losses.append(loss)
 
-        # Save the mean epoch loss
-        losses.append(np.mean(epoch_losses))
+        # Early stopping.
+        if early_stopping(losses, consecutive_increases=5):
+            print("Losses: {}".format(losses))
+            print("Early stopping.")
+            break
 
-    print("Losses: {}".format(losses))
+    print("Losses % through the data: {}".format(
+        [losses[int(frac / 100 * len(losses))] for frac in [0.0, 25.0, 50.0, 75.0, 99.99]]
+    ))
 
-    return np.mean(losses)
+    return np.min(losses)
 
 
 def compute_mean_strategy(strategy_memory: buffer.Reservoir):
@@ -270,7 +288,7 @@ def compute_mean_strategy(strategy_memory: buffer.Reservoir):
 def deep_cfr(n_game: neural_game.NeuralGame,
              num_iters: int=100, num_traversals: int=10000,
              advantage_maxlen: int=1000000, strategy_maxlen: int=1000000,
-             batch_size: int=1024, num_epochs: int=100):
+             batch_size: int=1024, num_sgd_updates: int=100):
     """
     Args:
         n_game: NeuralGame.
@@ -279,7 +297,7 @@ def deep_cfr(n_game: neural_game.NeuralGame,
         advantage_maxlen: int. The maximum length of the advantage memories.
         strategy_maxlen: int. The maximum length of the strategy memory.
         batch_size: int. The batch size to use in training.
-        num_epochs: int. The number of epochs for each training run.
+        num_sgd_updates: int. The number of sgd updates per training.
 
     Returns:
         strategy, exploitability.
@@ -316,7 +334,7 @@ def deep_cfr(n_game: neural_game.NeuralGame,
                 network.initialise()
                 advantage_memory = advantage_memory1 if player == 1 else advantage_memory2
                 mean_loss = train_network(network, advantage_memory, action_indexer, info_set_vectoriser,
-                                          t, batch_size, num_epochs)
+                                          t, batch_size, num_sgd_updates)
 
                 print("Mean loss: {}".format(mean_loss))
 
