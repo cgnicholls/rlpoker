@@ -2,8 +2,10 @@
 (2019).
 """
 
-import typing
 import collections
+import os
+import time
+import typing
 
 import numpy as np
 import tensorflow as tf
@@ -17,6 +19,7 @@ from rlpoker import buffer
 from rlpoker import extensive_game
 from rlpoker import best_response
 from rlpoker import neural_game
+from rlpoker import util
 
 
 StrategyMemoryElement = collections.namedtuple('StrategyMemoryElement', [
@@ -100,6 +103,8 @@ class DeepRegretNetwork(RegretPredictor):
         self.scope = 'regret_network_{}'.format(self.player)
         self.tensors, self.init_op = self.build(self.state_shape, self.action_indexer.action_dim, self.scope)
 
+        self.global_step = 0
+
     def initialise(self):
         """
         Initialise the weights of the network, using the tensorflow session self.sess.
@@ -126,6 +131,8 @@ class DeepRegretNetwork(RegretPredictor):
 
             loss = tf.reduce_mean(times * regrets) / current_time
 
+            summary = tf.summary.scalar('loss', loss)
+
             train_op = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(loss)
 
         tensors = {
@@ -135,7 +142,8 @@ class DeepRegretNetwork(RegretPredictor):
             'loss': loss,
             'times': times,
             'current_time': current_time,
-            'info_set_advantages': info_set_advantages
+            'info_set_advantages': info_set_advantages,
+            'summary': summary
         }
 
         init_op = tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope))
@@ -169,6 +177,7 @@ class DeepRegretNetwork(RegretPredictor):
 
         Returns:
             loss: float.
+            summary: tensorflow summary.
         """
         # Each batch is an AdvantageMemoryElement.
         info_set_vectors = [info_set_vectoriser.get_vector(element.info_set_id) for element in batch]
@@ -176,14 +185,18 @@ class DeepRegretNetwork(RegretPredictor):
         info_set_advantages = [info_set_advantages_to_vector(action_indexer, element.info_set_advantages)
                                for element in batch]
 
-        _, computed_loss = self.sess.run([self.tensors['train_op'], self.tensors['loss']], feed_dict={
-            self.tensors['input_layer']: np.array(info_set_vectors),
-            self.tensors['times']: np.array(times).reshape(-1, 1),
-            self.tensors['current_time']: current_time,
-            self.tensors['info_set_advantages']: np.array(info_set_advantages).reshape(-1, action_indexer.action_dim)
+        _, computed_loss, summary = self.sess.run(
+            [self.tensors['train_op'], self.tensors['loss'], self.tensors['summary']],
+            feed_dict={
+                self.tensors['input_layer']: np.array(info_set_vectors),
+                self.tensors['times']: np.array(times).reshape(-1, 1),
+                self.tensors['current_time']: current_time,
+                self.tensors['info_set_advantages']: np.array(info_set_advantages).reshape(-1, action_indexer.action_dim)
         })
 
-        return computed_loss
+        self.global_step += 1
+
+        return computed_loss, summary
 
 
 def info_set_advantages_to_vector(action_indexer: neural_game.ActionIndexer,
@@ -244,6 +257,7 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
                   action_indexer: neural_game.ActionIndexer,
                   info_set_vectoriser: neural_game.InfoSetVectoriser,
                   current_time: int,
+                  writer: tf.summary.FileWriter,
                   batch_size=1024, num_sgd_updates=4000):
     """Trains the given network from scratch
 
@@ -252,6 +266,8 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
         advantage_memory: Reservoir. Each entry should be an AdvantageMemoryElement.
         action_indexer: ActionIndexer. Turns actions into indices.
         info_set_vectoriser: InfoSetVectoriser. Turns information set ids into vectors.
+        current_time: int. The current time.
+        writer: tf.summary.FileWriter.
         batch_size: int. The size to use for each batch.
         num_sgd_updates: int. The number of sgd updates to do.
 
@@ -271,7 +287,8 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
 
         batch = advantage_memory.get_elements(batch_indices)
 
-        loss = network.train(batch, action_indexer, info_set_vectoriser, current_time=current_time)
+        loss, summary = network.train(batch, action_indexer, info_set_vectoriser, current_time=current_time)
+        writer.add_summary(summary, network.global_step)
         losses.append(loss)
 
         # Early stopping.
@@ -326,6 +343,21 @@ def deep_cfr(n_game: neural_game.NeuralGame,
     advantage_memory2 = buffer.Reservoir(maxlen=advantage_maxlen)
     strategy_memory = buffer.Reservoir(maxlen=strategy_maxlen)
 
+    # Create summary tensors
+    valid_summariser = util.TBSummariser(['exploitability'])
+
+    time_str = time.strftime("%Y-%m-%d-%H:%M:%S", time.gmtime())
+    save_path = os.path.join('experiments', time_str)
+
+    if not os.path.exists(save_path):
+        print("Path doesn't exist, so creating: {}".format(save_path))
+        os.makedirs(save_path)
+
+    log_file = os.path.join(save_path, 'nfsp.log')
+    print("Log file {}".format(log_file))
+
+    print("To run tensorboard: tensorboard --logdir {}".format(os.path.join(os.getcwd(), save_path)))
+
     with tf.Session() as sess:
         network1 = DeepRegretNetwork(info_set_vectoriser.state_shape, action_indexer, 1)
         network1.set_sess(sess)
@@ -334,6 +366,8 @@ def deep_cfr(n_game: neural_game.NeuralGame,
 
         network1.initialise()
         network2.initialise()
+
+        tf_train_writer = tf.summary.FileWriter(os.path.join(save_path, 'train'), graph=sess.graph)
 
         # Iterate over players and do cfr traversals.
         for t in range(1, num_iters + 1):
@@ -351,10 +385,12 @@ def deep_cfr(n_game: neural_game.NeuralGame,
                 network = network1 if player == 1 else network2
                 network.initialise()
                 advantage_memory = advantage_memory1 if player == 1 else advantage_memory2
-                mean_loss = train_network(network, advantage_memory, action_indexer, info_set_vectoriser,
-                                          t, batch_size, num_sgd_updates)
+                mean_loss = train_network(
+                    network, advantage_memory, action_indexer, info_set_vectoriser, t,
+                    tf_train_writer, batch_size, num_sgd_updates)
 
                 print("Mean loss: {}".format(mean_loss))
+                tf_train_writer.flush()
 
             # print("################")
             #
@@ -395,6 +431,9 @@ def deep_cfr(n_game: neural_game.NeuralGame,
                     game.complete_strategy_uniformly(mean_strategy)
                 )
             print("Exploitability: {} mbb/h".format(exploitability * 1000))
+
+            valid_summary = valid_summariser.summarise(sess, {'exploitability': exploitability})
+            tf_train_writer.add_summary(valid_summary, global_step=t)
 
     # TODO(chrisn). Train the network on the strategy memory.
     return mean_strategy, exploitability
