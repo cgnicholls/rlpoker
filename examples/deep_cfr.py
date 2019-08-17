@@ -24,7 +24,7 @@ if __name__ == "__main__":
                         help='The batch size to use in training.')
     parser.add_argument('--num_sgd_updates', default=4000, type=int,
                         help='The number of epochs to use in training.')
-    parser.add_argument('--game', default='RockPaperScissors', choices=games,
+    parser.add_argument('--game', default='Leduc', choices=games,
                         help='The game to play')
 
     parser.add_argument('--num_values', default=3, type=int,
@@ -35,6 +35,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.game == 'Leduc':
+        print("Solving Leduc Hold'em")
         cards = card.get_deck(num_values=args.num_values, num_suits=args.num_suits)
         n_game = leduc.create_neural_leduc(cards)
     elif args.game == 'RockPaperScissors':

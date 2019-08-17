@@ -222,6 +222,24 @@ def early_stopping(losses: typing.List[float], consecutive_increases: int=2):
     return sorted(relevant_losses) == relevant_losses
 
 
+def early_stopping_water_mark(losses: typing.List[float], num_attempts: int=5):
+    """Returns True if and only if the loss has failed to beat the low water mark in num_attempts 
+    attempts.
+
+    Args:
+        losses: list of floats. The losses.
+        num_attempts: int. The number of attempts to beat the low water mark.
+
+    Returns:
+        early_stop: bool. True if and only if we should early stop.
+    """
+    # Can't early stop before we see enough losses.
+    if len(losses) <= num_attempts:
+        return False
+
+    return min(losses[-num_attempts:]) > min(losses)
+
+
 def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir,
                   action_indexer: neural_game.ActionIndexer,
                   info_set_vectoriser: neural_game.InfoSetVectoriser,
@@ -257,7 +275,7 @@ def train_network(network: DeepRegretNetwork, advantage_memory: buffer.Reservoir
         losses.append(loss)
 
         # Early stopping.
-        if early_stopping(losses, consecutive_increases=5):
+        if early_stopping_water_mark(losses, num_attempts=20):
             print("Losses: {}".format(losses))
             print("Early stopping.")
             break
