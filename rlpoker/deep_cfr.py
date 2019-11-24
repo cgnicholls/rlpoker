@@ -491,9 +491,11 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
         else:
             info_set_strategy = network.compute_action_probs(state_vector, action_indexer)
 
-        average_regret = sum([info_set_strategy[action] * values[action] for action in get_available_actions(node)])
+        sampled_counterfactual_value = sum([info_set_strategy[action] * values[action] for action in
+                                            get_available_actions(
+            node)])
         for action in get_available_actions(node):
-            info_set_regrets[action] = values[action] - average_regret
+            info_set_regrets[action] = values[action] - sampled_counterfactual_value
 
         info_set_id = game.info_set_ids[node]
         advantage_memory = advantage_memory1 if player == 1 else advantage_memory2
@@ -501,7 +503,7 @@ def cfr_traverse(game: extensive_game.ExtensiveGame, action_indexer: neural_game
 
         # In traverser infosets, the value passed back up is the weighted average of all action values,
         # where action a’s weight is info_set_strategy[a]
-        return average_regret
+        return sampled_counterfactual_value
     else:
         # It's the other player's turn.
         state_vector = info_set_vectoriser.get_vector(game.get_info_set_id(node))
