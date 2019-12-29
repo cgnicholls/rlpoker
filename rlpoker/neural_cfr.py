@@ -73,7 +73,7 @@ if __name__ == "__main__":
     cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
     game = Leduc(cards)
 
-    strategy, exploitabilities = cfr(game, num_iters=args.cfr_iters,
+    strategy, exploitabilities, strategies = cfr(game, num_iters=args.cfr_iters,
         use_chance_sampling=args.use_chance_sampling)
 
     exploitability = compute_exploitability(game, strategy)

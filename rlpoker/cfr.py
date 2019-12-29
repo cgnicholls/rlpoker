@@ -1,6 +1,5 @@
 # coding: utf-8
-# This implements Counterfactual Regret Minimization in a general zero sum two
-# player game.
+# This implements Counterfactual Regret Minimization in a general zero-sum two-player game.
 
 import pickle
 import typing
@@ -10,6 +9,7 @@ import numpy as np
 from rlpoker import best_response
 from rlpoker.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
+from rlpoker import cfr_util
 from rlpoker.extensive_game import ActionFloat, Strategy
 
 
@@ -45,52 +45,6 @@ def compare_strategies(s1: Strategy, s2: Strategy):
     return np.mean(distances)
 
 
-def normalise_probs(probs: ActionFloat, epsilon=1e-7):
-    """Sets the minimum prob to be epsilon, and then normalises by dividing by the sum.
-
-    Args:
-        probs: ActionFloat. Must all be non-negative.
-
-    Returns:
-        norm_probs: ActionFloat.
-    """
-    assert min(probs.values()) >= 0.0
-    probs = {a: max(prob, epsilon) for a, prob in probs.items()}
-    return ActionFloat({a: prob / sum(probs.values()) for a, prob in probs.items()})
-
-
-def compute_regret_matching(action_regrets: ActionFloat, epsilon=1e-7, highest_regret=False):
-    """Given regrets r_i for actions a_i, we compute the regret matching strategy as follows.
-
-    If sum_i max(0, r_i) > 0:
-        Play action a_i proportionally to max(0, r_i)
-    Else:
-        Play all actions uniformly.
-
-    Args:
-        regrets: dict
-        epsilon: the minimum probability to return for each action, for numerical stability.
-        highest_regret: if True, then when all regrets are negative, return epsilon for all but the highest regret
-            actions.
-
-    Returns:
-        ActionFloat. The probability of taking each action in this information set.
-    """
-    # If no regrets are positive, just return the uniform probability distribution on available actions.
-    if max([v for k, v in action_regrets.items()]) <= 0.0:
-        if highest_regret:
-            probs = {action: epsilon for action in action_regrets}
-            best_action = max(action_regrets, key=action_regrets.get)
-            probs[best_action] = 1.0
-            return normalise_probs(ActionFloat(probs), epsilon=epsilon)
-        else:
-            return ActionFloat.initialise_uniform(action_regrets.action_list)
-    else:
-        # Otherwise take the positive part of each regret (i.e. the maximum of the regret and zero),
-        # and play actions with probability proportional to positive regret.
-        return normalise_probs(ActionFloat({k: max(0.0, v) for k, v in action_regrets.items()}), epsilon=epsilon)
-
-
 def cfr(game, num_iters=10000, use_chance_sampling=True):
     """
 
@@ -119,6 +73,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 
     average_strategy = None
     exploitabilities = []
+    strategies = []
 
     # Each information set is uniquely identified with an action tuple.
     for t in range(num_iters):
@@ -134,6 +89,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
         # cfr_recursive, and want to hold on to strategy_t_1 separately to
         # compare.
         strategy_t = strategy_t_1.copy()
+        strategies.append(strategy_t.copy())
 
         # Compute the exploitability of the strategy.
         if t % 10 == 0:
@@ -144,7 +100,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 
             print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
 
-    return average_strategy, exploitabilities
+    return average_strategy, exploitabilities, strategies
 
 
 # The Game object holds a game state at any point in time, and can return an information set label
@@ -229,7 +185,7 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
         )
 
         # Update strategy t plus 1
-        strategy_t_1[information_set] = compute_regret_matching(regrets[information_set])
+        strategy_t_1[information_set] = cfr_util.compute_regret_matching(regrets[information_set])
 
     # Return the value
     return value

@@ -11,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
+import rlpoker.cfr_util
 from rlpoker import cfr
 from rlpoker.cfr_game import (
     get_available_actions, sample_chance_action, is_terminal, payoffs, which_player)
@@ -63,7 +64,7 @@ class RegretPredictor:
             ActionFloat. The action probabilities in this information set.
         """
         action_advantages = self.predict_advantages(info_set_vector, action_indexer)
-        return cfr.compute_regret_matching(action_advantages, highest_regret=True)
+        return rlpoker.cfr_util.compute_regret_matching(action_advantages, highest_regret=True)
 
     def train(self, batch: typing.List[AdvantageMemoryElement],
               action_indexer: neural_game.ActionIndexer,

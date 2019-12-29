@@ -8,6 +8,7 @@ from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.games.card import get_deck
 from rlpoker.games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
+from rlpoker import cfr_metrics
 
 if __name__ == "__main__":
     games = ['Leduc', 'OneCardPoker', 'RockPaperScissors']
@@ -40,8 +41,14 @@ if __name__ == "__main__":
         print("Solving rock paper scissors")
         game, _, _ = create_neural_rock_paper_scissors()
 
-    strategy, exploitabilities = cfr(game, num_iters=args.num_iters,
-        use_chance_sampling=args.use_chance_sampling)
+    strategy, exploitabilities, strategies = cfr(
+        game, num_iters=args.num_iters,
+        use_chance_sampling=args.use_chance_sampling
+    )
+
+    # Now compute the immediate regrets.
+    cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(game, strategies)
+    print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
 
     # Save the strategy and plot the performance.
 

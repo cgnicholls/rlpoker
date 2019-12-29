@@ -37,3 +37,7 @@ Other ideas:
 * Try training on a smaller game, e.g. OneCardPoker.
 * Look through exactly what transitions we are training on.
 * Can we just train the deep Q-network separately, to verify it is working?
+
+
+# 28/12/2019
+* Working on refactoring CFR to use a different information set representation.

@@ -157,27 +157,3 @@ def initialise_arrays():
         c_regrets[info_set] = np.array([0.0,0.0])
         c_strategy[info_set] = np.array([0.0,0.0])
     return strategy, c_regrets, c_strategy
-
-def run_cfr(T):
-    strategy, c_regrets, c_strategy = initialise_arrays()
-    vals = {1: [], 2: []}
-    for t in range(T):
-        for player in [1,2]:
-            avg_util = cfr([], '', player, t, 1.0, 1.0, strategy, c_regrets,
-            c_strategy)
-            vals[player].append(avg_util)
-    print "Player 1 avg value", np.mean(vals[1]), " (std: ", np.std(vals[1]), ")"
-    print "Player 2 avg value", np.mean(vals[2]), " (std: ", np.std(vals[2]), ")"
-    return c_regrets, c_strategy
-
-def normalise_strategy(strategy):
-    normalising_sum = np.sum(strategy)
-    if normalising_sum > 0:
-        return strategy / normalising_sum
-    else:
-        uniform_dist = np.ones(np.shape(strategy))
-        return uniform_dist / np.sum(uniform_dist)
-
-c_regrets, c_strategy = run_cfr(10000)
-avg_strategy = {k:normalise_strategy(v) for k, v in c_strategy.iteritems()}
-print avg_strategy

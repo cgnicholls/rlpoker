@@ -13,8 +13,7 @@ def test_best_response_cfr():
     cards = [Card(value, suit) for value in range(3) for suit in range(2)]
     game = Leduc(cards)
 
-    strategy, exploitabilities = cfr(game, num_iters=10,
-                                     use_chance_sampling=False)
+    strategy, exploitabilities, strategies = cfr(game, num_iters=10, use_chance_sampling=False)
 
     exploitability = compute_exploitability(game, strategy)
 
@@ -25,8 +24,7 @@ def test_best_response_cfr():
 def test_best_response_cfr_one_card_poker():
     game = OneCardPoker.create_game(n_cards=4)
 
-    strategy, exploitabilities = cfr(game, num_iters=10,
-                                     use_chance_sampling=False)
+    strategy, exploitabilities, strategies = cfr(game, num_iters=10, use_chance_sampling=False)
 
     exploitability = compute_exploitability(game, strategy)
 
