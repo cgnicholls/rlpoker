@@ -2,6 +2,7 @@
 # This implements Counterfactual Regret Minimization in a general zero-sum two-player game.
 
 import pickle
+import time
 import typing
 
 import numpy as np
@@ -11,6 +12,7 @@ from rlpoker.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
 from rlpoker import cfr_util
 from rlpoker.extensive_game import ActionFloat, Strategy
+from rlpoker import cfr_metrics
 
 
 def compute_average_strategy(action_counts):
@@ -76,6 +78,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
     strategies = []
 
     # Each information set is uniquely identified with an action tuple.
+    start_time = time.time()
     for t in range(num_iters):
         for i in [1, 2]:
             cfr_recursive(game, game.root, i, t, 1.0, 1.0, 1.0, regrets,
@@ -93,12 +96,19 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 
         # Compute the exploitability of the strategy.
         if t % 10 == 0:
+            print("t: {}. Time since last evaluation: {:.4f} s".format(t, time.time() - start_time))
+            start_time = time.time()
             completed_strategy = game.complete_strategy_uniformly(average_strategy)
             exploitability = best_response.compute_exploitability(
                 game, completed_strategy)
             exploitabilities.append((t, exploitability))
 
             print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
+
+            cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(
+                game, strategies)
+            print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
+
 
     return average_strategy, exploitabilities, strategies
 
