@@ -28,18 +28,25 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
     # Since information sets encode the player, we only require one dictionary.
     regrets = dict()
 
-    # Similarly, action_counts is a dictionary with keys the information sets
-    # and values dictionaries from actions to action counts.
-    action_counts = dict()
-
     # Strategy_t holds the strategy at time t; similarly strategy_t_1 holds the
     # strategy at time t + 1.
     strategy_t = extensive_game.Strategy.initialise()
     strategy_t_1 = extensive_game.Strategy.initialise()
 
+    average_strategy = cfr_util.AverageStrategy(game)
+
+    strategies = []
+
     for t in range(num_iters):
         for player in [1, 2]:
-            external_sampling_cfr_recursive(game, game.root, player, regrets, action_counts, strategy_t, strategy_t_1)
+            external_sampling_cfr_recursive(game, game.root, player, regrets, strategy_t, strategy_t_1)
+
+        # Update the strategies
+        strategy_t = strategy_t_1.copy()
+        strategies.append(strategy_t.copy())
+
+        # Compute the average strategy
+        cfr_util.update_average_strategy(game, average_strategy, strategy_t)
 
 
 def external_sampling_cfr_recursive(
@@ -107,7 +114,7 @@ def external_sampling_cfr_recursive(
         )
 
         # Update the strategy for the next iteration
-        strategy_t_1[information_set] = cfr_util.compute_regret_matching()
+        strategy_t_1[information_set] = cfr_util.compute_regret_matching(regrets[information_set])
 
         return expected_utility
     else:

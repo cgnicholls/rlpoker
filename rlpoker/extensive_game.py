@@ -64,6 +64,10 @@ class ActionFloat(Mapping):
 
         return ActionFloat(action_float)
 
+    @staticmethod
+    def scalar_multiply(action_float: 'ActionFloat', scalar: float) -> 'ActionFloat':
+        return ActionFloat({action: v * scalar for action, v in action_float.items()})
+
     @property
     def action_list(self):
         """
@@ -181,12 +185,13 @@ class ExtensiveGameNode:
     """
     A game node in an extensive form game.
     """
+
     def __init__(self, player: int,
-                 action_list: typing.Tuple=(),
-                 children: typing.Optional[typing.Dict]=None,
-                 hidden_from: typing.Optional[typing.Set]=None,
-                 chance_probs: typing.Optional[ActionFloat]=None,
-                 utility: typing.Optional[typing.Dict]=None):
+                 action_list: typing.Tuple = (),
+                 children: typing.Optional[typing.Dict] = None,
+                 hidden_from: typing.Optional[typing.Set] = None,
+                 chance_probs: typing.Optional[ActionFloat] = None,
+                 utility: typing.Optional[typing.Dict] = None):
         """
         Args:
             player: int. The player to play in the node. Use -1 for terminal, 0 for chance, 1 for player 1,
@@ -441,7 +446,7 @@ class ExtensiveGame:
 
         return True
 
-    def get_node(self, actions: typing.Tuple) -> ExtensiveGameNode:
+    def get_node(self, actions: typing.Tuple) -> typing.Union[ExtensiveGameNode, None]:
         """
         Returns the node in the tree corresponding to the given action list, or None, if no such node exists.
 
