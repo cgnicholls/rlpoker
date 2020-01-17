@@ -3,6 +3,7 @@ import argparse
 # import bokeh.plotting as plt
 
 from rlpoker.cfr import cfr, save_strategy, load_strategy
+from rlpoker import external_cfr
 from rlpoker.games.leduc import Leduc
 from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.games.card import get_deck
@@ -12,6 +13,7 @@ from rlpoker import cfr_metrics
 
 if __name__ == "__main__":
     games = ['Leduc', 'OneCardPoker', 'RockPaperScissors']
+    cfr_algorithms = ['vanilla', 'external']
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_iters', default=10000, type=int,
@@ -26,6 +28,8 @@ if __name__ == "__main__":
     parser.add_argument('--use_chance_sampling', action='store_true',
                         help='Pass this option to use chance sampling. By '
                              'default, we don\'t use chance sampling.')
+    parser.add_argument('--cfr_algorithm', choices=cfr_algorithms, required=True,
+                        help='Which cfr algorithm to use. Choose between vanilla and external.')
     args = parser.parse_args()
 
     if args.game == 'Leduc':
@@ -41,10 +45,15 @@ if __name__ == "__main__":
         print("Solving rock paper scissors")
         game, _, _ = create_neural_rock_paper_scissors()
 
-    strategy, exploitabilities, strategies = cfr(
-        game, num_iters=args.num_iters,
-        use_chance_sampling=args.use_chance_sampling
-    )
+    if args.cfr_algorithm == 'vanilla':
+        strategy, exploitabilities, strategies = cfr(
+            game, num_iters=args.num_iters,
+            use_chance_sampling=args.use_chance_sampling
+        )
+    elif args.cfr_algorithm == 'external':
+        strategy, = external_cfr.external_sampling_cfr(game, num_iters=args.num_iters)
+    else:
+        raise ValueError("args.cfr_algorithm was not in {}".format(cfr_algorithms))
 
     # Now compute the immediate regrets.
     cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(game, strategies)
@@ -68,4 +77,3 @@ if __name__ == "__main__":
     # p.line(times, exploits)
     #
     # print("Saved plot of exploitability at: {}".format(plot_name))
-

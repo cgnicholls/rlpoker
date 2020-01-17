@@ -99,8 +99,8 @@ class ActionFloat(Mapping):
 
 class Strategy:
     """
-    A Strategy is a dictionary mapping information sets to ActionProbabilities in those information sets. The
-    ActionProbabilities should only contain the valid actions in the information set.
+    A Strategy is a dictionary mapping information sets to an ActionFloat defining a probability distribution over
+    actions in those information sets. The ActionFloat should only contain the valid actions in the information set.
     """
 
     @staticmethod

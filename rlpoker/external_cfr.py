@@ -8,6 +8,8 @@ from typing import Any, List, Dict
 from rlpoker import extensive_game
 from rlpoker import cfr_game
 from rlpoker import cfr_util
+from rlpoker import best_response
+from rlpoker import cfr_metrics
 
 
 def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1000):
@@ -19,8 +21,8 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
 
     Returns:
         average_strategy
-        regrets
         exploitabilities
+        strategies
     """
     # regrets is a dictionary where the keys are the information sets and values
     # are dictionaries from actions available in that information set to the
@@ -36,6 +38,7 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
     average_strategy = cfr_util.AverageStrategy(game)
 
     strategies = []
+    exploitabilities = []
 
     for t in range(num_iters):
         for player in [1, 2]:
@@ -43,10 +46,26 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
 
         # Update the strategies
         strategy_t = strategy_t_1.copy()
-        strategies.append(strategy_t.copy())
+        strategies.append(game.complete_strategy_uniformly(strategy_t))
 
         # Compute the average strategy
-        cfr_util.update_average_strategy(game, average_strategy, strategy_t)
+        if t % 200 == 0:
+            # Update average strategy
+            completed_strategy = game.complete_strategy_uniformly(strategy_t)
+            cfr_util.update_average_strategy(game, average_strategy, completed_strategy)
+
+            # Compute exploitability
+            completed_average_strategy = game.complete_strategy_uniformly(average_strategy.compute_strategy())
+            exploitability = best_response.compute_exploitability(game, completed_average_strategy)
+            exploitabilities.append((t, exploitability))
+
+            print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
+
+            cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(
+                game, strategies)
+            print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
+
+    return average_strategy.compute_strategy(), exploitabilities, strategies
 
 
 def external_sampling_cfr_recursive(
@@ -100,7 +119,7 @@ def external_sampling_cfr_recursive(
         immediate_regrets = dict()
         for action, child in node.children.items():
             expected_utilities[action] = external_sampling_cfr_recursive(
-                game, node, player, regrets, strategy_t, strategy_t_1)
+                game, child, player, regrets, strategy_t, strategy_t_1)
             action_probs[action] = strategy_t[information_set][action]
 
             expected_utility += action_probs[action] * expected_utilities[action]
@@ -108,10 +127,13 @@ def external_sampling_cfr_recursive(
             # Update the regrets.
             immediate_regrets[action] = (1 - action_probs[action]) * expected_utilities[action]
 
-        regrets[information_set] = extensive_game.ActionFloat.sum(
-            regrets[information_set],
-            extensive_game.ActionFloat(immediate_regrets)
-        )
+        if information_set not in regrets:
+            regrets[information_set] = extensive_game.ActionFloat(immediate_regrets)
+        else:
+            regrets[information_set] = extensive_game.ActionFloat.sum(
+                regrets[information_set],
+                extensive_game.ActionFloat(immediate_regrets)
+            )
 
         # Update the strategy for the next iteration
         strategy_t_1[information_set] = cfr_util.compute_regret_matching(regrets[information_set])

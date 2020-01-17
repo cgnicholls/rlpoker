@@ -52,6 +52,12 @@ def normalise_probs(probs: extensive_game.ActionFloat, epsilon=1e-7):
 class AverageStrategy:
     """
     An AverageStrategy is used to compute a time-average of a sequence of strategies in an imperfect information game.
+
+    It stores
+        - alpha[I][a] = sum_{t=1}^T sum_{h in I} pi_i^{sigma^t}(h) sigma^t(I, a)
+        - beta[I][a] = sum_{t=1}^T sum_{h in I} pi_i^{sigma^t}(h)
+
+    Then the strategy is sigma'[I][a] = alpha[I][a] / beta[I][a]
     """
 
     def __init__(self, game: extensive_game.ExtensiveGame):
@@ -77,6 +83,20 @@ class AverageStrategy:
             self.alpha[info_set] = extensive_game.ActionFloat.sum(self.alpha[info_set], additional)
 
         self.beta[info_set] = self.beta.get(info_set, 0.0) + pi
+
+    def compute_strategy(self):
+        """
+        Returns a strategy corresponding to the average strategy.
+
+        Returns:
+            strategy:
+        """
+        strategy = dict()
+        for info_set in self.alpha:
+            strategy[info_set] = extensive_game.ActionFloat.scalar_multiply(
+                self.alpha[info_set], 1.0 / self.beta[info_set])
+
+        return extensive_game.Strategy(strategy)
 
 
 def update_average_strategy(game: extensive_game.ExtensiveGame, average_strategy: AverageStrategy,

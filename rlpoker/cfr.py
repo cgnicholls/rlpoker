@@ -41,7 +41,7 @@ def compare_strategies(s1: Strategy, s2: Strategy):
     distances = []
     for information_set in common_keys:
         prob_dist_diff = [
-            float(s1[information_set][a] - s2[information_set][a])**2 for a in
+            float(s1[information_set][a] - s2[information_set][a]) ** 2 for a in
             s1[information_set]]
         distances.append(np.sqrt(np.mean(prob_dist_diff)))
     return np.mean(distances)
@@ -77,6 +77,8 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
     exploitabilities = []
     strategies = []
 
+    average_strategy2 = cfr_util.AverageStrategy(game)
+
     # Each information set is uniquely identified with an action tuple.
     start_time = time.time()
     for t in range(num_iters):
@@ -105,10 +107,16 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 
             print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
 
+            # Also compute it using the average strategy framework
+            cfr_util.update_average_strategy(game, average_strategy2, completed_strategy)
+
+            completed_average_strategy = game.complete_strategy_uniformly(average_strategy2.compute_strategy())
+            exploitability = best_response.compute_exploitability(game, completed_average_strategy)
+            print("Exploitability 2: {}".format(exploitability))
+
             cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(
                 game, strategies)
             print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
-
 
     return average_strategy, exploitabilities, strategies
 
