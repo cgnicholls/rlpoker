@@ -429,7 +429,7 @@ def deep_cfr(n_game: neural_game.NeuralGame,
                 print("Strategy not complete, filling uniformly.")
                 exploitability = best_response.compute_exploitability(
                     game,
-                    game.complete_strategy_uniformly(mean_strategy)
+                    mean_strategy,
                 )
             print("Exploitability: {} mbb/h".format(exploitability * 1000))
 

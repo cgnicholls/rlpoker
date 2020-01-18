@@ -2,6 +2,15 @@ from rlpoker import extensive_game
 from rlpoker import cfr_game
 
 
+class CFRState:
+
+    def __init__(self):
+        self.nodes_touched = 0
+
+    def node_touched(self):
+        self.nodes_touched += 1
+
+
 def compute_regret_matching(action_regrets: extensive_game.ActionFloat, epsilon=1e-7, highest_regret=False):
     """Given regrets r_i for actions a_i, we compute the regret matching strategy as follows.
 
@@ -112,7 +121,7 @@ def update_average_strategy(game: extensive_game.ExtensiveGame, average_strategy
     Returns:
         average_strategy: the updated average strategy.
     """
-    update_average_strategy_recursive(game, game.root, average_strategy, strategy, pi1=1.0, pi2=1.0)
+    update_average_strategy_recursive(game, game.root, average_strategy, strategy, pi1=1.0, pi2=1.0, pic=1.0)
 
     return average_strategy
 
@@ -123,7 +132,9 @@ def update_average_strategy_recursive(
         average_strategy: AverageStrategy,
         strategy: extensive_game.Strategy,
         pi1: float,
-        pi2: float):
+        pi2: float,
+        pic: float,
+):
     """
     Walk over the game tree and update alpha, beta for the AverageStrategy.
 
@@ -148,6 +159,7 @@ def update_average_strategy_recursive(
         strategy:
         pi1: the reach probability for this node according to just player 1's strategy.
         pi2: the reach probability for this node according to just player 2's strategy.
+        pic: the reach probability for this node according to just chance probabilities.
     """
 
     if node.player == -1:
@@ -156,22 +168,29 @@ def update_average_strategy_recursive(
     elif node.player == 0:
         # Chance node
         for a, chance_prob in node.chance_probs.items():
-            update_average_strategy_recursive(game, node.children[a], average_strategy, strategy, pi1, pi2)
+            update_average_strategy_recursive(game, node.children[a], average_strategy, strategy, pi1, pi2,
+                                              pic * chance_prob)
     elif node.player == 1:
         info_set = cfr_game.get_information_set(game, node)
+        if info_set not in strategy:
+            return
+
         action_probs = strategy.get_action_probs(info_set)
 
         # Update alpha and beta
         average_strategy.update(node, pi1, action_probs)
         for a, action_prob in action_probs.items():
             update_average_strategy_recursive(
-                game, node.children[a], average_strategy, strategy, pi1 * action_prob, pi2)
+                game, node.children[a], average_strategy, strategy, pi1 * action_prob, pi2, pic)
     elif node.player == 2:
         info_set = cfr_game.get_information_set(game, node)
+        if info_set not in strategy:
+            return
+
         action_probs = strategy.get_action_probs(info_set)
 
         # Update alpha and beta
         average_strategy.update(node, pi2, action_probs)
         for a, action_prob in action_probs.items():
             update_average_strategy_recursive(
-                game, node.children[a], average_strategy, strategy, pi1, pi2 * action_prob)
+                game, node.children[a], average_strategy, strategy, pi1, pi2 * action_prob, pic)

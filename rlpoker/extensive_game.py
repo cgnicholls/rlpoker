@@ -424,9 +424,8 @@ class ExtensiveGame:
                 new_strategy[info_set_id] = {
                     a: 1.0 / float(len(actions)) for a in actions}
                 num_missing += 1
-        if num_missing > 0:
-            print("Completed strategy at {} information sets.".format(num_missing))
-        return new_strategy
+
+        return new_strategy, num_missing
 
     def is_strategy_complete(self, strategy: Strategy):
         """Returns whether or not the strategy contains probabilities for

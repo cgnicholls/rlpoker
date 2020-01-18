@@ -34,6 +34,7 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
     # strategy at time t + 1.
     strategy_t = extensive_game.Strategy.initialise()
     strategy_t_1 = extensive_game.Strategy.initialise()
+    cfr_state = cfr_util.CFRState()
 
     average_strategy = cfr_util.AverageStrategy(game)
 
@@ -42,28 +43,26 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
 
     for t in range(num_iters):
         for player in [1, 2]:
-            external_sampling_cfr_recursive(game, game.root, player, regrets, strategy_t, strategy_t_1)
+            external_sampling_cfr_recursive(game, game.root, player, regrets, strategy_t, strategy_t_1, cfr_state)
 
         # Update the strategies
         strategy_t = strategy_t_1.copy()
-        strategies.append(game.complete_strategy_uniformly(strategy_t))
+        strategies.append(strategy_t)
+
+        # Update average strategy
+        cfr_util.update_average_strategy(game, average_strategy, strategy_t)
 
         # Compute the average strategy
         if t % 200 == 0:
-            # Update average strategy
-            completed_strategy = game.complete_strategy_uniformly(strategy_t)
-            cfr_util.update_average_strategy(game, average_strategy, completed_strategy)
-
             # Compute exploitability
-            completed_average_strategy = game.complete_strategy_uniformly(average_strategy.compute_strategy())
-            exploitability = best_response.compute_exploitability(game, completed_average_strategy)
+            exploitability = best_response.compute_exploitability(game, average_strategy.compute_strategy())
             exploitabilities.append((t, exploitability))
 
-            print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
+            print("t: {}, nodes touched: {}, exploitability: {:.3f} mbb/h".format(
+                t, cfr_state.nodes_touched, exploitability * 1000))
 
-            cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(
-                game, strategies)
-            print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
+            immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
+            print("Immediate regret: {}".format(immediate_regret))
 
     return average_strategy.compute_strategy(), exploitabilities, strategies
 
@@ -75,6 +74,7 @@ def external_sampling_cfr_recursive(
         regrets: Dict,
         strategy_t: extensive_game.Strategy,
         strategy_t_1: extensive_game.Strategy,
+        cfr_state: cfr_util.CFRState,
 ):
     """
     Computes the 'expected player utility' sum_{z in Q and Z_I} pi_i^sigma (z[I], z) u_i(z). Samples the actions of
@@ -89,10 +89,12 @@ def external_sampling_cfr_recursive(
         regrets:
         strategy_t: the strategy used at time t. We don't update this one.
         strategy_t_1: the strategy to use at time t + 1. We update this one in this function call.
+        cfr_state: general state about CFR progress.
 
     Returns:
         expected_player_utility
     """
+    cfr_state.node_touched()
     if node.player == -1:
         # Terminal node. Just return the utility to the player.
         return node.utility[player]
@@ -105,7 +107,9 @@ def external_sampling_cfr_recursive(
             player,
             regrets,
             strategy_t,
-            strategy_t_1)
+            strategy_t_1,
+            cfr_state,
+        )
     elif node.player == player:
         # Return sum_{z in Q and Z_I} pi_i^sigma (z[I], z) u_i(z)
 
@@ -119,7 +123,7 @@ def external_sampling_cfr_recursive(
         immediate_regrets = dict()
         for action, child in node.children.items():
             expected_utilities[action] = external_sampling_cfr_recursive(
-                game, child, player, regrets, strategy_t, strategy_t_1)
+                game, child, player, regrets, strategy_t, strategy_t_1, cfr_state)
             action_probs[action] = strategy_t[information_set][action]
 
             expected_utility += action_probs[action] * expected_utilities[action]
@@ -152,4 +156,6 @@ def external_sampling_cfr_recursive(
             player,
             regrets,
             strategy_t,
-            strategy_t_1)
+            strategy_t_1,
+            cfr_state,
+        )

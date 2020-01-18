@@ -4,15 +4,20 @@ times t = 1, ..., T for an extensive game that implements CFR.
 """
 
 import collections
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from rlpoker import cfr_game
 from rlpoker import extensive_game
 
 
-def compute_immediate_regret(game: extensive_game.ExtensiveGame, strategies: List[extensive_game.Strategy]):
+def compute_immediate_regret(game: extensive_game.ExtensiveGame, strategies: List[extensive_game.Strategy]) -> \
+        (List[float], List[Dict[Any, float]]):
     """
     Computes the immediate counterfactual regret at each information set for each player.
+
+    This is defined as
+        1 / T * max_a \sum_{t=1}^T \sum_{h \in I} u_i^{sigma^t}(ha) - u_i^{sigma^t}(h),
+    where u_i^sigma(h) is the counterfactual value to player i = player(I) of being in node h.
 
     Args:
         game: ExtensiveGame.
@@ -20,6 +25,9 @@ def compute_immediate_regret(game: extensive_game.ExtensiveGame, strategies: Lis
             player 2 strategies.
 
     Returns:
+        immediate_regret: float. The immediate regret at time T (the last time).
+        cumulative_immediate_regrets: list where the t^th element is the cumulative immediate regret (summed over
+            all information sets) at time t.
         all_immediate_regrets: list of dictionaries where the t^th dictionary maps information sets to their
             immediate regret at time t.
     """
@@ -27,7 +35,8 @@ def compute_immediate_regret(game: extensive_game.ExtensiveGame, strategies: Lis
     for t, strategy in enumerate(strategies):
         node_regrets = collections.defaultdict(dict)
         # This function fills in the immediate regrets for each node.
-        compute_node_regret_recursive(game, game.root, strategy, node_regrets, 1.0, 1.0, 1.0)
+        completed_strategy, num_missing = game.complete_strategy_uniformly(strategy)
+        compute_node_regret_recursive(game, game.root, completed_strategy, node_regrets, 1.0, 1.0, 1.0)
 
         # Initialise the immediate regrets for each info set.
         info_set_regrets = collections.defaultdict(dict)
@@ -35,6 +44,7 @@ def compute_immediate_regret(game: extensive_game.ExtensiveGame, strategies: Lis
             info_set = game.get_info_set_id(node)
             info_set_regrets[info_set] = collections.defaultdict(float)
 
+        # The immediate regret for an info set is just the sum of the immediate regrets of the nodes in that info set.
         for node, node_regret in node_regrets.items():
             info_set = game.get_info_set_id(node)
             for action, regret in node_regret.items():
@@ -58,13 +68,14 @@ def compute_immediate_regret(game: extensive_game.ExtensiveGame, strategies: Lis
 
                 cumulative_regret[info_set][action] += regret
 
-            immediate_regrets[info_set] = 1 / (1 + t) * max(cumulative_regret[info_set],
-                                                            key=cumulative_regret[info_set].get)
+            immediate_regrets[info_set] = 1 / (1 + t) * max(cumulative_regret[info_set].values())
 
         all_immediate_regrets.append(immediate_regrets)
         cumulative_immediate_regrets.append(sum(immediate_regrets.values()))
 
-    return cumulative_immediate_regrets, all_immediate_regrets
+    immediate_regret = cumulative_immediate_regrets[-1]
+
+    return immediate_regret, cumulative_immediate_regrets, all_immediate_regrets
 
 
 def compute_node_regret_recursive(
@@ -79,7 +90,11 @@ def compute_node_regret_recursive(
     """
     Computes the immediate counterfactual regret at each node for each player. This is defined as:
         regret_i(sigma, h, a) = u_i(sigma, ha) - u_i(sigma, h),
-    where h is a player i node.
+    where h is a player i node and u_i(sigma, h) is the counterfactual value to player i of being in node h,
+    given that the strategy profile is sigma. Formally,
+        u_i(sigma, h) = pi_i^sigma(h) \sum_{z in Z_h} pi^sigma(h, z) v_i(z),
+    where
+        v_i(z) is the utility to player i of the terminal node z.
 
     Args:
         game: ExtensiveGame.

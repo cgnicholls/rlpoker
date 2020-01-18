@@ -130,9 +130,12 @@ def compute_exploitability(game: extensive_game.ExtensiveGame, strategy: extensi
     Returns:
         exploitability: float.
     """
+    # First complete the strategy.
+    completed_strategy, num_missing = game.complete_strategy_uniformly(strategy)
+
     # First compute the best response against the strategy when the strategy
     # plays as player 1. Then compute the best response against the strategy
     # when it plays as player 2.
-    exploitability_1, br_against_1 = compute_best_response(game, strategy, 1)
-    exploitability_2, br_against_2 = compute_best_response(game, strategy, 2)
+    exploitability_1, br_against_1 = compute_best_response(game, completed_strategy, 1)
+    exploitability_2, br_against_2 = compute_best_response(game, completed_strategy, 2)
     return exploitability_1 + exploitability_2

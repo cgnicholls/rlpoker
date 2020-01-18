@@ -15,7 +15,7 @@ from rlpoker.extensive_game import ActionFloat, Strategy
 from rlpoker import cfr_metrics
 
 
-def compute_average_strategy(action_counts):
+def compute_average_strategy(action_counts: typing.Dict) -> Strategy:
     average_strategy = dict()
     for information_set in action_counts:
         num_actions = sum([v for k, v in action_counts[information_set].items()])
@@ -24,7 +24,7 @@ def compute_average_strategy(action_counts):
                 k: float(v) / float(num_actions) for k, v in
                 action_counts[information_set].items()}
 
-    return average_strategy
+    return Strategy(average_strategy)
 
 
 def compare_strategies(s1: Strategy, s2: Strategy):
@@ -68,6 +68,8 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
     # and values dictionaries from actions to action counts.
     action_counts = dict()
 
+    cfr_state = cfr_util.CFRState()
+
     # Strategy_t holds the strategy at time t; similarly strategy_t_1 holds the
     # strategy at time t + 1.
     strategy_t = Strategy.initialise()
@@ -85,9 +87,11 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
         for i in [1, 2]:
             cfr_recursive(game, game.root, i, t, 1.0, 1.0, 1.0, regrets,
                           action_counts, strategy_t, strategy_t_1,
+                          cfr_state,
                           use_chance_sampling=use_chance_sampling)
 
         average_strategy = compute_average_strategy(action_counts)
+        cfr_util.update_average_strategy(game, average_strategy2, average_strategy)
 
         # Update strategy_t to equal strategy_t_1. We update strategy_t_1 inside
         # cfr_recursive.  We take a copy because we update it inside
@@ -100,23 +104,18 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
         if t % 10 == 0:
             print("t: {}. Time since last evaluation: {:.4f} s".format(t, time.time() - start_time))
             start_time = time.time()
-            completed_strategy = game.complete_strategy_uniformly(average_strategy)
             exploitability = best_response.compute_exploitability(
-                game, completed_strategy)
+                game, average_strategy)
             exploitabilities.append((t, exploitability))
 
-            print("t: {}, exploitability: {} mbb/h".format(t, exploitability * 1000))
+            print("t: {}, nodes touched: {}, exploitability: {} mbb/h".format(t, cfr_state.nodes_touched,
+                                                                              exploitability * 1000))
 
-            # Also compute it using the average strategy framework
-            cfr_util.update_average_strategy(game, average_strategy2, completed_strategy)
+            exploitability = best_response.compute_exploitability(game, average_strategy2.compute_strategy())
+            print("Exploitability (av strategy method 2): {} mbb/h".format(exploitability * 1000))
 
-            completed_average_strategy = game.complete_strategy_uniformly(average_strategy2.compute_strategy())
-            exploitability = best_response.compute_exploitability(game, completed_average_strategy)
-            print("Exploitability 2: {}".format(exploitability))
-
-            cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(
-                game, strategies)
-            print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
+            immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
+            print("Immediate regret: {}".format(immediate_regret))
 
     return average_strategy, exploitabilities, strategies
 
@@ -125,7 +124,9 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 # for that game state, which uniquely identifies the information set and is the same for all states
 # in that information set.
 def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typing.Any, ActionFloat],
-                  action_counts, strategy_t, strategy_t_1, use_chance_sampling=False):
+                  action_counts, strategy_t, strategy_t_1, cfr_state: cfr_util.CFRState,
+                  use_chance_sampling=False):
+    cfr_state.node_touched()
     # If the node is terminal, just return the payoffs
     if is_terminal(node):
         return payoffs(node)[i]
@@ -136,6 +137,7 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
             return cfr_recursive(
                 game, node.children[a], i, t, pi_c, pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
+                cfr_state,
                 use_chance_sampling=use_chance_sampling)
         else:
             value = 0
@@ -143,6 +145,7 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
                 value += cp * cfr_recursive(
                     game, node.children[a], i, t, cp * pi_c, pi_1, pi_2,
                     regrets, action_counts, strategy_t, strategy_t_1,
+                    cfr_state,
                     use_chance_sampling=use_chance_sampling)
             return value
 
@@ -168,12 +171,14 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
                 game, node.children[a], i, t, pi_c,
                 strategy_t.get_action_probs(information_set)[a] * pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
+                cfr_state,
                 use_chance_sampling=use_chance_sampling)
         else:
             values_Itoa[a] = cfr_recursive(
                 game, node.children[a], i, t, pi_c,
                 pi_1, strategy_t[information_set][a] * pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
+                cfr_state,
                 use_chance_sampling=use_chance_sampling)
         value += strategy_t[information_set][a] * values_Itoa[a]
 

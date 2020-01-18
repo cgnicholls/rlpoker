@@ -47,17 +47,21 @@ if __name__ == "__main__":
 
     if args.cfr_algorithm == 'vanilla':
         strategy, exploitabilities, strategies = cfr(
-            game, num_iters=args.num_iters,
+            game,
+            num_iters=args.num_iters,
             use_chance_sampling=args.use_chance_sampling
         )
     elif args.cfr_algorithm == 'external':
-        strategy, = external_cfr.external_sampling_cfr(game, num_iters=args.num_iters)
+        strategy, exploitabilities, strategies = external_cfr.external_sampling_cfr(
+            game,
+            num_iters=args.num_iters
+        )
     else:
         raise ValueError("args.cfr_algorithm was not in {}".format(cfr_algorithms))
 
     # Now compute the immediate regrets.
-    cumulative_immediate_regrets, all_immediate_regrets = cfr_metrics.compute_immediate_regret(game, strategies)
-    print("Cumulative immediate regrets: {}".format(cumulative_immediate_regrets))
+    immmediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
+    print("Immediate regret: {}".format(immmediate_regret))
 
     # Save the strategy and plot the performance.
 
