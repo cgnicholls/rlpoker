@@ -65,6 +65,14 @@ class ActionFloat(Mapping):
         return ActionFloat(action_float)
 
     @staticmethod
+    def normalise(action_float: 'ActionFloat'):
+        if min(action_float.values()) < 0.0:
+            raise ValueError("All action floats must be positive.")
+
+        norm = sum(action_float.values())
+        return ActionFloat({a: v / norm for a, v in action_float.items()})
+
+    @staticmethod
     def scalar_multiply(action_float: 'ActionFloat', scalar: float) -> 'ActionFloat':
         return ActionFloat({action: v * scalar for action, v in action_float.items()})
 

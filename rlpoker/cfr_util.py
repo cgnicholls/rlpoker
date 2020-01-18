@@ -64,18 +64,16 @@ class AverageStrategy:
 
     It stores
         - alpha[I][a] = sum_{t=1}^T sum_{h in I} pi_i^{sigma^t}(h) sigma^t(I, a)
-        - beta[I][a] = sum_{t=1}^T sum_{h in I} pi_i^{sigma^t}(h)
 
-    Then the strategy is sigma'[I][a] = alpha[I][a] / beta[I][a]
+    Then the strategy is sigma'[I][a] proportional to alpha[I][a].
     """
 
     def __init__(self, game: extensive_game.ExtensiveGame):
         self.game = game
 
         self.alpha = dict()  # A dictionary mapping information sets to ActionFloats.
-        self.beta = dict()  # A dictionary mapping information sets to floats.
 
-    def update(self, node, pi: float, action_probs: extensive_game.ActionFloat):
+    def update(self, node, pi: float, action_probs: extensive_game.ActionFloat, weight=1.0):
         """
         Update alpha and beta for the given node. Let node be a player i game node.
 
@@ -85,13 +83,14 @@ class AverageStrategy:
             action_probs: strategy probabilities for player i at node.
         """
         info_set = cfr_game.get_information_set(self.game, node)
-        additional = extensive_game.ActionFloat.scalar_multiply(action_probs, pi)
+
+        update_weight = pi * weight
+
+        additional = extensive_game.ActionFloat.scalar_multiply(action_probs, update_weight)
         if info_set not in self.alpha:
             self.alpha[info_set] = additional
         else:
             self.alpha[info_set] = extensive_game.ActionFloat.sum(self.alpha[info_set], additional)
-
-        self.beta[info_set] = self.beta.get(info_set, 0.0) + pi
 
     def compute_strategy(self):
         """
@@ -102,8 +101,7 @@ class AverageStrategy:
         """
         strategy = dict()
         for info_set in self.alpha:
-            strategy[info_set] = extensive_game.ActionFloat.scalar_multiply(
-                self.alpha[info_set], 1.0 / self.beta[info_set])
+            strategy[info_set] = extensive_game.ActionFloat.normalise(self.alpha[info_set])
 
         return extensive_game.Strategy(strategy)
 

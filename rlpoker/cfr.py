@@ -91,7 +91,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
                           use_chance_sampling=use_chance_sampling)
 
         average_strategy = compute_average_strategy(action_counts)
-        cfr_util.update_average_strategy(game, average_strategy2, average_strategy)
+        cfr_util.update_average_strategy(game, average_strategy2, strategy_t)
 
         # Update strategy_t to equal strategy_t_1. We update strategy_t_1 inside
         # cfr_recursive.  We take a copy because we update it inside
@@ -198,7 +198,8 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
             pi_minus_i = pi_c * pi_1 if i == 2 else pi_c * pi_2
             pi_i = pi_1 if i == 1 else pi_2
             regrets_to_add[a] = (values_Itoa[a] - value) * pi_minus_i
-            action_counts_to_add[a] = pi_c * pi_i * strategy_t[information_set][a]
+            # action_counts_to_add[a] = pi_c * pi_i * strategy_t[information_set][a]
+            action_counts_to_add[a] = pi_i * strategy_t[information_set][a]
 
         # Update the regrets and action counts.
         regrets[information_set] = ActionFloat.sum(regrets[information_set], ActionFloat(regrets_to_add))
