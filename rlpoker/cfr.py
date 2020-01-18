@@ -47,7 +47,7 @@ def compare_strategies(s1: Strategy, s2: Strategy):
     return np.mean(distances)
 
 
-def cfr(game, num_iters=10000, use_chance_sampling=True):
+def cfr(game, num_iters=10000, use_chance_sampling=True, linear_weight=False):
     """
 
     Args:
@@ -84,14 +84,16 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
     # Each information set is uniquely identified with an action tuple.
     start_time = time.time()
     for t in range(num_iters):
+        weight = t if linear_weight else 1.0
         for i in [1, 2]:
             cfr_recursive(game, game.root, i, t, 1.0, 1.0, 1.0, regrets,
                           action_counts, strategy_t, strategy_t_1,
                           cfr_state,
-                          use_chance_sampling=use_chance_sampling)
+                          use_chance_sampling=use_chance_sampling,
+                          weight=weight)
 
         average_strategy = compute_average_strategy(action_counts)
-        cfr_util.update_average_strategy(game, average_strategy2, strategy_t)
+        cfr_util.update_average_strategy(game, average_strategy2, strategy_t, weight=weight)
 
         # Update strategy_t to equal strategy_t_1. We update strategy_t_1 inside
         # cfr_recursive.  We take a copy because we update it inside
@@ -125,7 +127,7 @@ def cfr(game, num_iters=10000, use_chance_sampling=True):
 # in that information set.
 def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typing.Any, ActionFloat],
                   action_counts, strategy_t, strategy_t_1, cfr_state: cfr_util.CFRState,
-                  use_chance_sampling=False):
+                  use_chance_sampling=False, weight=1.0):
     cfr_state.node_touched()
     # If the node is terminal, just return the payoffs
     if is_terminal(node):
@@ -138,7 +140,9 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
                 game, node.children[a], i, t, pi_c, pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
                 cfr_state,
-                use_chance_sampling=use_chance_sampling)
+                use_chance_sampling=use_chance_sampling,
+                weight=weight,
+            )
         else:
             value = 0
             for a, cp in node.chance_probs.items():
@@ -146,7 +150,9 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
                     game, node.children[a], i, t, cp * pi_c, pi_1, pi_2,
                     regrets, action_counts, strategy_t, strategy_t_1,
                     cfr_state,
-                    use_chance_sampling=use_chance_sampling)
+                    use_chance_sampling=use_chance_sampling,
+                    weight=weight,
+                )
             return value
 
     # Get the information set
@@ -172,14 +178,18 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
                 strategy_t.get_action_probs(information_set)[a] * pi_1, pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
                 cfr_state,
-                use_chance_sampling=use_chance_sampling)
+                use_chance_sampling=use_chance_sampling,
+                weight=weight,
+            )
         else:
             values_Itoa[a] = cfr_recursive(
                 game, node.children[a], i, t, pi_c,
                 pi_1, strategy_t[information_set][a] * pi_2,
                 regrets, action_counts, strategy_t, strategy_t_1,
                 cfr_state,
-                use_chance_sampling=use_chance_sampling)
+                use_chance_sampling=use_chance_sampling,
+                weight=weight
+            )
         value += strategy_t[information_set][a] * values_Itoa[a]
 
     # Update regrets now that we have computed the counterfactual value of the
@@ -197,9 +207,9 @@ def cfr_recursive(game, node, i, t, pi_c, pi_1, pi_2, regrets: typing.Dict[typin
         for a in available_actions:
             pi_minus_i = pi_c * pi_1 if i == 2 else pi_c * pi_2
             pi_i = pi_1 if i == 1 else pi_2
-            regrets_to_add[a] = (values_Itoa[a] - value) * pi_minus_i
+            regrets_to_add[a] = weight * (values_Itoa[a] - value) * pi_minus_i
             # action_counts_to_add[a] = pi_c * pi_i * strategy_t[information_set][a]
-            action_counts_to_add[a] = pi_i * strategy_t[information_set][a]
+            action_counts_to_add[a] = weight * pi_i * strategy_t[information_set][a]
 
         # Update the regrets and action counts.
         regrets[information_set] = ActionFloat.sum(regrets[information_set], ActionFloat(regrets_to_add))

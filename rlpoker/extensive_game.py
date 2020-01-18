@@ -70,7 +70,11 @@ class ActionFloat(Mapping):
             raise ValueError("All action floats must be positive.")
 
         norm = sum(action_float.values())
-        return ActionFloat({a: v / norm for a, v in action_float.items()})
+        if norm == 0.0:
+            num_actions = len(action_float.keys())
+            return ActionFloat({a: 1.0 / num_actions for a in action_float})
+        else:
+            return ActionFloat({a: v / norm for a, v in action_float.items()})
 
     @staticmethod
     def scalar_multiply(action_float: 'ActionFloat', scalar: float) -> 'ActionFloat':

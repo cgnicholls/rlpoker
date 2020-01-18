@@ -107,7 +107,7 @@ class AverageStrategy:
 
 
 def update_average_strategy(game: extensive_game.ExtensiveGame, average_strategy: AverageStrategy,
-                            strategy: extensive_game.Strategy):
+                            strategy: extensive_game.Strategy, weight: float = 1.0):
     """
     Updates the average strategy with the given strategy.
 
@@ -115,11 +115,13 @@ def update_average_strategy(game: extensive_game.ExtensiveGame, average_strategy
         game: ExtensiveGame.
         average_strategy: AverageStrategy. The average strategy for both players.
         strategy: Strategy. The strategy for both players.
+        weight: the weight of this update.
 
     Returns:
         average_strategy: the updated average strategy.
     """
-    update_average_strategy_recursive(game, game.root, average_strategy, strategy, pi1=1.0, pi2=1.0, pic=1.0)
+    update_average_strategy_recursive(game, game.root, average_strategy, strategy, pi1=1.0, pi2=1.0, pic=1.0,
+                                      weight=weight)
 
     return average_strategy
 
@@ -132,6 +134,7 @@ def update_average_strategy_recursive(
         pi1: float,
         pi2: float,
         pic: float,
+        weight: float = 1.0,
 ):
     """
     Walk over the game tree and update alpha, beta for the AverageStrategy.
@@ -158,6 +161,7 @@ def update_average_strategy_recursive(
         pi1: the reach probability for this node according to just player 1's strategy.
         pi2: the reach probability for this node according to just player 2's strategy.
         pic: the reach probability for this node according to just chance probabilities.
+        weight: the weight of this update.
     """
 
     if node.player == -1:
@@ -167,7 +171,7 @@ def update_average_strategy_recursive(
         # Chance node
         for a, chance_prob in node.chance_probs.items():
             update_average_strategy_recursive(game, node.children[a], average_strategy, strategy, pi1, pi2,
-                                              pic * chance_prob)
+                                              pic * chance_prob, weight=weight)
     elif node.player == 1:
         info_set = cfr_game.get_information_set(game, node)
         if info_set not in strategy:
@@ -176,10 +180,10 @@ def update_average_strategy_recursive(
         action_probs = strategy.get_action_probs(info_set)
 
         # Update alpha and beta
-        average_strategy.update(node, pi1, action_probs)
+        average_strategy.update(node, pi1, action_probs, weight=weight)
         for a, action_prob in action_probs.items():
             update_average_strategy_recursive(
-                game, node.children[a], average_strategy, strategy, pi1 * action_prob, pi2, pic)
+                game, node.children[a], average_strategy, strategy, pi1 * action_prob, pi2, pic, weight=weight)
     elif node.player == 2:
         info_set = cfr_game.get_information_set(game, node)
         if info_set not in strategy:
@@ -188,7 +192,7 @@ def update_average_strategy_recursive(
         action_probs = strategy.get_action_probs(info_set)
 
         # Update alpha and beta
-        average_strategy.update(node, pi2, action_probs)
+        average_strategy.update(node, pi2, action_probs, weight=weight)
         for a, action_prob in action_probs.items():
             update_average_strategy_recursive(
-                game, node.children[a], average_strategy, strategy, pi1, pi2 * action_prob, pic)
+                game, node.children[a], average_strategy, strategy, pi1, pi2 * action_prob, pic, weight=weight)

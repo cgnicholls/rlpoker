@@ -61,8 +61,8 @@ def external_sampling_cfr(game: extensive_game.ExtensiveGame, num_iters: int = 1
             print("t: {}, nodes touched: {}, exploitability: {:.3f} mbb/h".format(
                 t, cfr_state.nodes_touched, exploitability * 1000))
 
-            immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
-            print("Immediate regret: {}".format(immediate_regret))
+            # immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
+            # print("Immediate regret: {}".format(immediate_regret))
 
     return average_strategy.compute_strategy(), exploitabilities, strategies
 
@@ -128,8 +128,8 @@ def external_sampling_cfr_recursive(
 
             expected_utility += action_probs[action] * expected_utilities[action]
 
-            # Update the regrets.
-            immediate_regrets[action] = (1 - action_probs[action]) * expected_utilities[action]
+        for action in node.children:
+            immediate_regrets[action] = expected_utilities[action] - expected_utility
 
         if information_set not in regrets:
             regrets[information_set] = extensive_game.ActionFloat(immediate_regrets)
