@@ -23,21 +23,3 @@ Run this using
 python examples/leduc_cfr.py
 ```
 
-
-# TODO:
-Investigate why NFSP isn't yet working.
-
-I fixed a bug where I was computing the transitions incorrectly. But the
-exploitability still doesn't decrease.
-
-At the moment I don't think the Q-loss is decreasing, so we might need to try a
-different learning rate, or to debug that separately.
-
-Other ideas:
-* Try training on a smaller game, e.g. OneCardPoker.
-* Look through exactly what transitions we are training on.
-* Can we just train the deep Q-network separately, to verify it is working?
-
-
-# 28/12/2019
-* Working on refactoring CFR to use a different information set representation.
