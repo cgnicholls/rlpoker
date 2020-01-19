@@ -1,8 +1,6 @@
 # rlpoker
 Reinforcement learning algorithms to play Poker.
 
-NFSP: implemented but not yet working.
-
 ## Create a game of Leduc Hold em with 3 cards:
 ```
 leduc = Leduc.create_game(3)
@@ -18,8 +16,18 @@ python rlpoker/nfsp.py
 strategy = cfr(leduc, num_iters=100000, use_chance_sampling=True)
 ```
 
-Run this using
+You can also use external sampling cfr instead:
 ```
-python examples/leduc_cfr.py
+python -m examples.cfr --game Leduc
+```
+
+You can also use external sampling cfr instead:
+```
+python -m examples.cfr --cfr_algorithm external --game Leduc
+```
+
+## Solve Leduc Hold Em using deep cfr
+```
+python -m examples.deep_cfr --game Leduc
 ```
 
