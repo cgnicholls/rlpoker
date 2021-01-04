@@ -8,11 +8,12 @@ import typing
 import numpy as np
 
 from rlpoker import best_response
+from rlpoker import cfr_metrics
+from rlpoker import cfr_util
 from rlpoker.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
-from rlpoker import cfr_util
 from rlpoker.extensive_game import ActionFloat, Strategy
-from rlpoker import cfr_metrics
+from rlpoker.util import ExperimentSummaryWriter
 
 
 def compute_average_strategy(action_counts: typing.Dict) -> Strategy:
@@ -47,10 +48,11 @@ def compare_strategies(s1: Strategy, s2: Strategy):
     return np.mean(distances)
 
 
-def cfr(game, num_iters=10000, use_chance_sampling=True, linear_weight=False):
+def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_weight=False, logdir: str = None):
     """
 
     Args:
+        exp_name: the experiment name. Used to create a directory for the experiment.
         game:
         num_iters:
         use_chance_sampling:
@@ -80,6 +82,8 @@ def cfr(game, num_iters=10000, use_chance_sampling=True, linear_weight=False):
     strategies = []
 
     average_strategy2 = cfr_util.AverageStrategy(game)
+
+    writer = ExperimentSummaryWriter(exp_name=exp_name, flush_secs=20)
 
     # Each information set is uniquely identified with an action tuple.
     start_time = time.time()
@@ -113,11 +117,15 @@ def cfr(game, num_iters=10000, use_chance_sampling=True, linear_weight=False):
             print("t: {}, nodes touched: {}, exploitability: {} mbb/h".format(t, cfr_state.nodes_touched,
                                                                               exploitability * 1000))
 
-            exploitability = best_response.compute_exploitability(game, average_strategy2.compute_strategy())
-            print("Exploitability (av strategy method 2): {} mbb/h".format(exploitability * 1000))
+            # exploitability = best_response.compute_exploitability(game, average_strategy2.compute_strategy())
+            # print("Exploitability (av strategy method 2): {} mbb/h".format(exploitability * 1000))
 
             immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
             print("Immediate regret: {}".format(immediate_regret))
+
+            writer.add_scalar('nodes_touched', cfr_state.nodes_touched, global_step=t)
+            writer.add_scalar('exploitability', exploitability, global_step=t)
+            writer.add_scalar('immediate_regret', immediate_regret, global_step=t)
 
     return average_strategy, exploitabilities, strategies
 

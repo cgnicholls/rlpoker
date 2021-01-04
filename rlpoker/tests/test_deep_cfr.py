@@ -5,7 +5,8 @@ from unittest.mock import Mock
 import numpy as np
 import tensorflow as tf
 
-from rlpoker import deep_cfr, neural_game, extensive_game, buffer
+from rlpoker import neural_game, extensive_game, buffer
+from rlpoker.deepcfr import deep_cfr
 from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 
 class TestDeepRegretNetwork(unittest.TestCase):

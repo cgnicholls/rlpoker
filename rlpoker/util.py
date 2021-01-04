@@ -1,27 +1,36 @@
+import os
+import time
 import typing
 
-import tensorflow as tf
-
 import numpy as np
+from tensorboardX import SummaryWriter
 
 
-class TBSummariser:
+class ExperimentSummaryWriter(SummaryWriter):
+    def __init__(self, exp_name: str = None, base_save_path: str = 'experiments', flush_secs: int = 120):
+        self._base_save_path = base_save_path
+        self._exp_name = exp_name
 
-    def __init__(self, scalar_names):
-        self.placeholders = {name: tf.placeholder(dtype=tf.float32, name=name) for name in scalar_names}
-        self.scalars = {name: tf.summary.scalar(name, placeholder) for name, placeholder in self.placeholders.items()}
+        self._exp_name = exp_name
+        if self._exp_name is None:
+            self._exp_name = time.strftime("%Y-%m-%d-%H:%M:%S", time.gmtime())
 
-        self.merged = tf.summary.merge([v for v in self.scalars.values()])
+        if os.path.exists(self.save_path):
+            raise ValueError(f"Experiment already exists at: {self.save_path}.")
 
-    def summarise(self, sess, scalar_values):
+        os.makedirs(self.save_path)
 
-        feed_dict = {
-            self.placeholders[name]: scalar_values[name] for name in self.placeholders
-        }
-        return sess.run(self.merged, feed_dict=feed_dict)
+        print("To run tensorboard: tensorboard --logdir {}".format(os.path.join(os.getcwd(), self.save_path)))
+
+        logdir = os.path.join(self.save_path, 'logs')
+        super().__init__(logdir=logdir, flush_secs=flush_secs)
+
+    @property
+    def save_path(self):
+        return os.path.join(self._base_save_path, self._exp_name)
 
 
-def sample_action(strategy, available_actions: typing.Union[None, typing.List]=None):
+def sample_action(strategy, available_actions: typing.Union[None, typing.List] = None):
     """Samples an action from the given strategy. If available actions is given, then we first restrict to those
     actions that are available.
 

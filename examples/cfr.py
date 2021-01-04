@@ -16,6 +16,7 @@ if __name__ == "__main__":
     cfr_algorithms = ['vanilla', 'external']
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--exp_name', default=None, type=str, help='The name of the experiment.')
     parser.add_argument('--num_iters', default=10000, type=int,
                         help='The number of iterations to run CFR for.')
     parser.add_argument('--game', default='Leduc', type=str, choices=games,
@@ -45,14 +46,18 @@ if __name__ == "__main__":
         print("Solving rock paper scissors")
         game, _, _ = create_neural_rock_paper_scissors()
 
+    exp_name = f'{args.cfr_algorithm}/{args.exp_name}'
+
     if args.cfr_algorithm == 'vanilla':
         strategy, exploitabilities, strategies = cfr(
+            exp_name,
             game,
             num_iters=args.num_iters,
             use_chance_sampling=args.use_chance_sampling
         )
     elif args.cfr_algorithm == 'external':
         strategy, exploitabilities, strategies = external_cfr.external_sampling_cfr(
+            exp_name,
             game,
             num_iters=args.num_iters
         )

@@ -30,4 +30,5 @@ python -m examples.cfr --cfr_algorithm external --game Leduc
 ```
 python -m examples.deep_cfr --game Leduc
 ```
-
+# Installation
+Use the rlpoker conda environment.

@@ -1,17 +1,15 @@
 import argparse
 
-from rlpoker import deep_cfr
-from rlpoker.games import leduc, rock_paper_scissors, one_card_poker
+from rlpoker.deepcfr import deep_cfr
+from rlpoker.games import leduc, rock_paper_scissors
 from rlpoker.games import card
-from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.best_response import compute_exploitability
-
-
 
 if __name__ == "__main__":
     games = ['Leduc', 'RockPaperScissors']
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--exp_name', default=None, type=str, help='The name of the experiment.')
     parser.add_argument('--num_iters', default=100, type=int,
                         help='The number of iterations to run deep CFR for.')
     parser.add_argument('--num_traversals', default=10000, type=int,
@@ -37,17 +35,19 @@ if __name__ == "__main__":
     if args.game == 'Leduc':
         print("Solving Leduc Hold'em")
         cards = card.get_deck(num_values=args.num_values, num_suits=args.num_suits)
-        n_game = leduc.create_neural_leduc(cards)
+        neural_game = leduc.create_neural_leduc(cards)
     elif args.game == 'RockPaperScissors':
         print("Solving rock paper scissors")
-        n_game = rock_paper_scissors.create_neural_rock_paper_scissors()
+        neural_game = rock_paper_scissors.create_neural_rock_paper_scissors()
 
-    strategy, exploitabilities = deep_cfr.deep_cfr(n_game,
-                                                   num_iters=args.num_iters, num_traversals=args.num_traversals,
-                                                   advantage_maxlen=args.advantage_maxlen,
-                                                   strategy_maxlen=args.strategy_maxlen,
-                                                   batch_size=args.batch_size,
-                                                   num_sgd_updates=args.num_sgd_updates)
+    strategy, exploitabilities = deep_cfr.deep_cfr(
+        exp_name=args.exp_name,
+        neural_game=neural_game,
+        num_iters=args.num_iters, num_traversals=args.num_traversals,
+        advantage_maxlen=args.advantage_maxlen,
+        strategy_maxlen=args.strategy_maxlen,
+        batch_size=args.batch_size,
+        num_sgd_updates=args.num_sgd_updates)
 
-    exploitability = compute_exploitability(n_game.extensive_game, strategy)
+    exploitability = compute_exploitability(neural_game.extensive_game, strategy)
     print("Exploitability of strategy: {}".format(exploitability))
