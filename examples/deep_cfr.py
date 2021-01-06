@@ -39,6 +39,8 @@ if __name__ == "__main__":
     elif args.game == 'RockPaperScissors':
         print("Solving rock paper scissors")
         neural_game = rock_paper_scissors.create_neural_rock_paper_scissors()
+    else:
+        raise ValueError(f"Unsupported game: {args.game}")
 
     strategy, exploitabilities = deep_cfr.deep_cfr(
         exp_name=args.exp_name,

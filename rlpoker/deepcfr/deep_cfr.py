@@ -2,9 +2,8 @@
 """
 import abc
 import collections
-import os
-import time
 from functools import lru_cache
+import os
 from typing import Any, Dict, NamedTuple, Sequence, List, Union
 
 import numpy as np
@@ -17,10 +16,29 @@ from rlpoker import best_response
 from rlpoker import buffer
 from rlpoker import extensive_game
 from rlpoker import neural_game
-from rlpoker import util
 from rlpoker.cfr_game import get_available_actions, sample_chance_action, is_terminal, payoffs, which_player
+from rlpoker.experiment import ExperimentSummaryWriter, Experiment
+from rlpoker.experiment import StrategySaver
 from rlpoker.extensive_game import ActionFloat
-from rlpoker.util import sample_action, ExperimentSummaryWriter
+from rlpoker.neural_game import NeuralGame
+from rlpoker.util import sample_action
+
+
+class DeepCFRExperiment(Experiment):
+
+    def __init__(self, neural_game: NeuralGame, exp_name: str = None, base_save_path: str = 'experiments',
+                 layer_sizes: Sequence[int] = (64, 64)):
+        self._neural_game = neural_game
+        self._layer_sizes = layer_sizes
+        super().__init__(exp_name=exp_name, base_save_path=base_save_path)
+
+    @property
+    def state_shape(self):
+        return self._neural_game.info_set_vectoriser.state_shape
+
+    @property
+    def layer_sizes(self):
+        return self._layer_sizes
 
 
 def check_numpy(x: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
@@ -186,6 +204,66 @@ class DeepAdvantageNetwork(AdvantageNetwork, nn.Module):
     @lru_cache
     def device(self):
         return next(self.parameters()).device
+
+    def save(self, file_name: str):
+        torch.save(self.state_dict(), file_name)
+
+    def load(self, file_name: str):
+        self.load_state_dict(torch.load(file_name))
+
+
+class DANStrategySaver:
+
+    def __init__(self, experiment: DeepCFRExperiment):
+        self._experiment = experiment
+        self._min_metric = np.float('inf')
+        self._min_metric_t = 0
+
+    def file_names(self, t: int):
+        return (
+            os.path.join(self._experiment.save_path, f'network1_{t:05d}.npy'),
+            os.path.join(self._experiment.save_path, f'network2_{t:05d}.npy'),
+        )
+
+    def _save(self, network1: DeepAdvantageNetwork, network2: DeepAdvantageNetwork,
+              file_name_1: str, file_name_2: str):
+        network1.save(file_name_1)
+        network2.save(file_name_2)
+
+    def _load(self, file_name_1: str, file_name_2: str):
+        network1 = DeepAdvantageNetwork(state_shape=self._experiment.state_shape,
+                                        action_indexer=self._experiment._neural_game.action_indexer,
+                                        player=1,
+                                        layer_sizes=self._experiment.layer_sizes)
+        network2 = DeepAdvantageNetwork(state_shape=self._experiment.state_shape,
+                                        action_indexer=self._experiment._neural_game.action_indexer,
+                                        player=2,
+                                        layer_sizes=self._experiment.layer_sizes)
+        network1.load(file_name_1)
+        network2.load(file_name_2)
+        return network1, network2
+
+    def save_strategy_at_step(self, network1: DeepAdvantageNetwork, network2: DeepAdvantageNetwork, t: int):
+        self._save(network1, network2, *self.file_names(t))
+
+    def load_strategy_from_step(self, t: int):
+        return self._load(*self.file_names(t))
+
+    @property
+    def file_names_best(self):
+        return (
+            os.path.join(self._experiment.save_path, f'network1_best.npy'),
+            os.path.join(self._experiment.save_path, f'network2_best.npy'),
+        )
+
+    def save_best(self, network1: DeepAdvantageNetwork, network2: DeepAdvantageNetwork, t: int, metric: float):
+        if metric < self._min_metric:
+            self._save(network1, network2, *self.file_names_best)
+            self._min_metric = metric
+            self._min_metric_t = t
+
+    def load_best(self):
+        return self._load(*self.file_names_best)
 
 
 def info_set_advantages_to_vector(action_indexer: neural_game.ActionIndexer,
@@ -355,10 +433,12 @@ def deep_cfr(
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+    experiment = DeepCFRExperiment(neural_game, exp_name)
+    writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
+    saver = DANStrategySaver(experiment=experiment)
+
     network1 = DeepAdvantageNetwork(info_set_vectoriser.state_shape, action_indexer, 1).to(device)
     network2 = DeepAdvantageNetwork(info_set_vectoriser.state_shape, action_indexer, 2).to(device)
-
-    writer = ExperimentSummaryWriter(exp_name=exp_name, flush_secs=20)
 
     # Iterate over players and do cfr traversals.
     global_step1 = 0
@@ -414,26 +494,23 @@ def deep_cfr(
         #     )
         # print("----------------")
         #
-
         print("Advantage memory 1 length: {}".format(len(advantage_memory1)))
         print("Advantage memory 2 length: {}".format(len(advantage_memory2)))
         print("Strategy memory length: {}".format(len(strategy_memory)))
 
         print(f"Computing mean strategy.")
         mean_strategy = compute_mean_strategy(strategy_memory)
-        # print("Strategy summary")
-        # print(mean_strategy)
-        if game.is_strategy_complete(mean_strategy):
-            exploitability = best_response.compute_exploitability(game, mean_strategy)
-        else:
+        if not game.is_strategy_complete(mean_strategy):
             print("Strategy not complete, filling uniformly.")
-            exploitability = best_response.compute_exploitability(
-                game,
-                mean_strategy,
-            )
+
+        exploitability = best_response.compute_exploitability(game, mean_strategy)
         print("Exploitability: {} mbb/h".format(exploitability * 1000))
 
         writer.add_scalar('exploitability_mbb_h', exploitability * 1000, global_step=t)
+        saver.save_best(network1, network2, t, exploitability)
+
+        if t % 100 == 0:
+            saver.save_strategy_at_step(network1, network2, t)
 
     # TODO(chrisn). Train the network on the strategy memory.
     return mean_strategy, exploitability

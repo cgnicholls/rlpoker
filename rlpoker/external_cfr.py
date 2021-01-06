@@ -10,7 +10,8 @@ from rlpoker import cfr_game
 from rlpoker import cfr_util
 from rlpoker import best_response
 from rlpoker import cfr_metrics
-from rlpoker.util import ExperimentSummaryWriter
+from rlpoker.cfr import StrategySaver
+from rlpoker.util import ExperimentSummaryWriter, Experiment
 
 
 def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num_iters: int = 1000):
@@ -43,7 +44,10 @@ def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num
     strategies = []
     exploitabilities = []
 
-    writer = ExperimentSummaryWriter(exp_name=exp_name, flush_secs=20)
+
+    experiment = Experiment(exp_name)
+    writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
+    saver = StrategySaver(experiment=experiment)
 
     for t in range(num_iters):
         for player in [1, 2]:
@@ -69,8 +73,10 @@ def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num
             print("Immediate regret: {}".format(immediate_regret))
 
             writer.add_scalar('nodes_touched', cfr_state.nodes_touched, global_step=t)
-            writer.add_scalar('exploitability', exploitability, global_step=t)
+            writer.add_scalar('exploitability_mbb_h', exploitability * 1000, global_step=t)
             writer.add_scalar('immediate_regret', immediate_regret, global_step=t)
+
+            saver.save_best_strategy(average_strategy, t, exploitability)
 
     return average_strategy.compute_strategy(), exploitabilities, strategies
 

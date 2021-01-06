@@ -1,6 +1,6 @@
-# coding: utf-8
 # This implements Counterfactual Regret Minimization in a general zero-sum two-player game.
 
+import os
 import pickle
 import time
 import typing
@@ -13,7 +13,16 @@ from rlpoker import cfr_util
 from rlpoker.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
 from rlpoker.extensive_game import ActionFloat, Strategy
-from rlpoker.util import ExperimentSummaryWriter
+from rlpoker.experiment import ExperimentSummaryWriter, Experiment, StrategySaver
+
+
+class CFRStrategySaver(StrategySaver):
+
+    def _save_strategy(self, strategy, file_name: str):
+        save_strategy(strategy, file_name)
+
+    def _load_strategy(self, file_name: str):
+        load_strategy(file_name)
 
 
 def compute_average_strategy(action_counts: typing.Dict) -> Strategy:
@@ -48,7 +57,7 @@ def compare_strategies(s1: Strategy, s2: Strategy):
     return np.mean(distances)
 
 
-def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_weight=False, logdir: str = None):
+def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_weight=False):
     """
 
     Args:
@@ -83,7 +92,9 @@ def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_w
 
     average_strategy2 = cfr_util.AverageStrategy(game)
 
-    writer = ExperimentSummaryWriter(exp_name=exp_name, flush_secs=20)
+    experiment = Experiment(exp_name)
+    writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
+    saver = CFRStrategySaver(experiment=experiment)
 
     # Each information set is uniquely identified with an action tuple.
     start_time = time.time()
@@ -124,8 +135,10 @@ def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_w
             print("Immediate regret: {}".format(immediate_regret))
 
             writer.add_scalar('nodes_touched', cfr_state.nodes_touched, global_step=t)
-            writer.add_scalar('exploitability', exploitability, global_step=t)
+            writer.add_scalar('exploitability_mbb_h', exploitability * 1000, global_step=t)
             writer.add_scalar('immediate_regret', immediate_regret, global_step=t)
+
+            saver.save_best_strategy(average_strategy, t, exploitability)
 
     return average_strategy, exploitabilities, strategies
 
