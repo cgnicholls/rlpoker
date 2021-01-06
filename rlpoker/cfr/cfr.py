@@ -1,6 +1,5 @@
 # This implements Counterfactual Regret Minimization in a general zero-sum two-player game.
 
-import os
 import pickle
 import time
 import typing
@@ -8,9 +7,8 @@ import typing
 import numpy as np
 
 from rlpoker import best_response
-from rlpoker import cfr_metrics
-from rlpoker import cfr_util
-from rlpoker.cfr_game import get_available_actions, get_information_set, \
+from rlpoker.cfr import cfr_metrics, cfr_util
+from rlpoker.cfr.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
 from rlpoker.extensive_game import ActionFloat, Strategy
 from rlpoker.experiment import ExperimentSummaryWriter, Experiment, StrategySaver
@@ -19,10 +17,16 @@ from rlpoker.experiment import ExperimentSummaryWriter, Experiment, StrategySave
 class CFRStrategySaver(StrategySaver):
 
     def _save_strategy(self, strategy, file_name: str):
-        save_strategy(strategy, file_name)
+        """Saves the strategy in the given file. A strategy is just a dictionary, so we save using json."""
+        with open(file_name, 'wb') as f:
+            pickle.dump(strategy, f)
 
     def _load_strategy(self, file_name: str):
-        load_strategy(file_name)
+        """Loads the strategy from a file. This is just json loading."""
+        with open(file_name, 'rb') as f:
+            strategy = pickle.load(f)
+
+        return strategy
 
 
 def compute_average_strategy(action_counts: typing.Dict) -> Strategy:
@@ -252,30 +256,3 @@ def evaluate_strategies(game, strategy, num_iters=500):
     approximate the expected value of player 1.
     """
     return game.expected_value(strategy, strategy, num_iters)
-
-
-def save_strategy(strategy, file_name):
-    """Saves the strategy in the given file. A strategy is just a
-    dictionary, so we save using json.
-
-    :param strategy:
-    :param file_name:
-    :return:
-    """
-    with open(file_name, 'wb') as f:
-        pickle.dump(strategy, f)
-
-
-def load_strategy(file_name):
-    """Loads the strategy from a file. This is just json loading.
-
-    Args:
-        file_name: str.
-
-    Returns:
-        dict: the strategy.
-    """
-    with open(file_name, 'rb') as f:
-        strategy = pickle.load(f)
-
-    return strategy

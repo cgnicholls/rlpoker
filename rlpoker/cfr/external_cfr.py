@@ -3,15 +3,12 @@ This module implements external-sampling MCCFR. See Lanctot et al. - Monte Carlo
 Extensive Games.
 """
 
-from typing import Any, List, Dict
+from typing import Dict
 
 from rlpoker import extensive_game
-from rlpoker import cfr_game
-from rlpoker import cfr_util
+from rlpoker.cfr import cfr, cfr_game, cfr_metrics, cfr_util
 from rlpoker import best_response
-from rlpoker import cfr_metrics
-from rlpoker.cfr import StrategySaver
-from rlpoker.util import ExperimentSummaryWriter, Experiment
+from rlpoker.experiment import ExperimentSummaryWriter, Experiment
 
 
 def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num_iters: int = 1000):
@@ -47,7 +44,7 @@ def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num
 
     experiment = Experiment(exp_name)
     writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
-    saver = StrategySaver(experiment=experiment)
+    saver = cfr.CFRStrategySaver(experiment=experiment)
 
     for t in range(num_iters):
         for player in [1, 2]:

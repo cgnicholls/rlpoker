@@ -2,14 +2,12 @@ import argparse
 
 # import bokeh.plotting as plt
 
-from rlpoker.cfr import cfr, save_strategy, load_strategy
-from rlpoker import external_cfr
+from rlpoker.cfr import cfr, external_cfr, cfr_metrics
 from rlpoker.games.leduc import Leduc
 from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.games.card import get_deck
 from rlpoker.games.one_card_poker import OneCardPoker
 from rlpoker.best_response import compute_exploitability
-from rlpoker import cfr_metrics
 
 if __name__ == "__main__":
     games = ['Leduc', 'OneCardPoker', 'RockPaperScissors']
@@ -37,19 +35,19 @@ if __name__ == "__main__":
         print("Solving Leduc Hold Em with {} iterations".format(args.num_iters))
         cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
         game = Leduc(cards)
-
     elif args.game == 'OneCardPoker':
         print("Solving One Card Poker")
         game = OneCardPoker.create_game(args.num_values)
-
     elif args.game == 'RockPaperScissors':
         print("Solving rock paper scissors")
         game, _, _ = create_neural_rock_paper_scissors()
+    else:
+        raise ValueError(f"Undefined game: {args.game}")
 
     exp_name = f'{args.cfr_algorithm}/{args.exp_name}'
 
     if args.cfr_algorithm == 'vanilla':
-        strategy, exploitabilities, strategies = cfr(
+        strategy, exploitabilities, strategies = cfr.cfr(
             exp_name,
             game,
             num_iters=args.num_iters,
@@ -67,12 +65,6 @@ if __name__ == "__main__":
     # Now compute the immediate regrets.
     immmediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
     print("Immediate regret: {}".format(immmediate_regret))
-
-    # Save the strategy and plot the performance.
-
-    strategy_name = '{}_cfr.strategy'.format(args.game)
-    print("Saving strategy at {}".format(strategy_name))
-    save_strategy(strategy, strategy_name)
 
     exploitability = compute_exploitability(game, strategy)
     print("Exploitability of saved strategy: {}".format(exploitability))

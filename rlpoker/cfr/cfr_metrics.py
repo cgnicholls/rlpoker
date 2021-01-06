@@ -6,7 +6,7 @@ times t = 1, ..., T for an extensive game that implements CFR.
 import collections
 from typing import Any, Dict, List
 
-from rlpoker import cfr_game
+from rlpoker.cfr import cfr_game
 from rlpoker import extensive_game
 
 

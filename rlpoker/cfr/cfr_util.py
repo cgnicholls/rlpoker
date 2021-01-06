@@ -1,5 +1,5 @@
 from rlpoker import extensive_game
-from rlpoker import cfr_game
+from rlpoker.cfr import cfr_game
 
 
 class CFRState:

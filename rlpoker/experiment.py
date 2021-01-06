@@ -14,7 +14,7 @@ class Experiment:
         if self._exp_name is None:
             self._exp_name = time.strftime("%Y-%m-%d-%H:%M:%S", time.gmtime())
 
-        os.makedirs(self._save_path, exist_ok=True)
+        os.makedirs(self.save_path, exist_ok=True)
 
     @property
     def save_path(self):

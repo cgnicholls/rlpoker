@@ -3,7 +3,7 @@ import unittest
 
 from rlpoker import extensive_game
 from rlpoker.games import rock_paper_scissors
-from rlpoker import cfr_metrics
+from rlpoker.cfr import cfr_metrics
 
 
 class TestCFRBasic(unittest.TestCase):

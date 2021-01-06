@@ -11,14 +11,13 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-import rlpoker.cfr_util
+import rlpoker.cfr.cfr_util
 from rlpoker import best_response
 from rlpoker import buffer
 from rlpoker import extensive_game
 from rlpoker import neural_game
-from rlpoker.cfr_game import get_available_actions, sample_chance_action, is_terminal, payoffs, which_player
+from rlpoker.cfr.cfr_game import get_available_actions, sample_chance_action, is_terminal, payoffs, which_player
 from rlpoker.experiment import ExperimentSummaryWriter, Experiment
-from rlpoker.experiment import StrategySaver
 from rlpoker.extensive_game import ActionFloat
 from rlpoker.neural_game import NeuralGame
 from rlpoker.util import sample_action
@@ -149,7 +148,7 @@ class AdvantageNetwork:
             ActionFloat. The action probabilities in this information set.
         """
         action_advantages = self.predict_advantages(info_set_vector, action_indexer)
-        return rlpoker.cfr_util.compute_regret_matching(action_advantages, highest_regret=True)
+        return rlpoker.cfr.cfr_util.compute_regret_matching(action_advantages, highest_regret=True)
 
 
 class DeepAdvantageNetwork(AdvantageNetwork, nn.Module):
