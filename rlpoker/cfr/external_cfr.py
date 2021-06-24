@@ -41,7 +41,6 @@ def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num
     strategies = []
     exploitabilities = []
 
-
     experiment = Experiment(exp_name)
     writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
     saver = cfr.CFRStrategySaver(experiment=experiment)

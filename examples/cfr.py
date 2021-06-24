@@ -44,7 +44,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Undefined game: {args.game}")
 
-    exp_name = f'{args.cfr_algorithm}/{args.exp_name}'
+    exp_name = f'{args.game}/{args.cfr_algorithm}/{args.exp_name}'
 
     if args.cfr_algorithm == 'vanilla':
         strategy, exploitabilities, strategies = cfr.cfr(
