@@ -4,6 +4,7 @@ import argparse
 
 from rlpoker.cfr import cfr, external_cfr, cfr_metrics
 from rlpoker.experiment import Experiment, WANDBExperimentWriter
+from rlpoker.games.game_builder import buildExtensiveGame
 from rlpoker.games.util import ExtensiveGameBuilder
 from rlpoker.games.leduc import Leduc
 from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
@@ -27,7 +28,7 @@ if __name__ == "__main__":
                         help='Which cfr algorithm to use. Choose between vanilla and external.')
     args = parser.parse_args()
 
-    game = ExtensiveGameBuilder.build(spec=args.game_specifier)
+    game = buildExtensiveGame(spec=args.game_specifier)
 
     experiment = Experiment(args.exp_name)
     experiment_writer = WANDBExperimentWriter(experiment)
