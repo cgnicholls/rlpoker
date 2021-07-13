@@ -3,6 +3,8 @@ import argparse
 # import bokeh.plotting as plt
 
 from rlpoker.cfr import cfr, external_cfr, cfr_metrics
+from rlpoker.experiment import Experiment, WANDBExperimentWriter
+from rlpoker.games.util import ExtensiveGameBuilder
 from rlpoker.games.leduc import Leduc
 from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
 from rlpoker.games.card import get_deck
@@ -14,16 +16,10 @@ if __name__ == "__main__":
     cfr_algorithms = ['vanilla', 'external']
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--exp_name', default=None, type=str, help='The name of the experiment.')
+    parser.add_argument('--exp_name', required=True, type=str, help='The name of the experiment.')
     parser.add_argument('--num_iters', default=10000, type=int,
                         help='The number of iterations to run CFR for.')
-    parser.add_argument('--game', default='Leduc', type=str, choices=games,
-                        help='The game to run CFR on.')
-    parser.add_argument('--num_values', default=3, type=int,
-                        help='In OneCardPoker or Leduc, pass the number of '
-                             'cards to use.')
-    parser.add_argument('--num_suits', default=2, type=int,
-                        help='In Leduc, pass the number of suits to use.')
+    parser.add_argument('--game_specifier', default='leduc:values_3:suits_2')
     parser.add_argument('--use_chance_sampling', action='store_true',
                         help='Pass this option to use chance sampling. By '
                              'default, we don\'t use chance sampling.')
@@ -31,33 +27,25 @@ if __name__ == "__main__":
                         help='Which cfr algorithm to use. Choose between vanilla and external.')
     args = parser.parse_args()
 
-    if args.game == 'Leduc':
-        print("Solving Leduc Hold Em with {} iterations".format(args.num_iters))
-        cards = get_deck(num_values=args.num_values, num_suits=args.num_suits)
-        game = Leduc(cards)
-    elif args.game == 'OneCardPoker':
-        print("Solving One Card Poker")
-        game = OneCardPoker.create_game(args.num_values)
-    elif args.game == 'RockPaperScissors':
-        print("Solving rock paper scissors")
-        game, _, _ = create_neural_rock_paper_scissors()
-    else:
-        raise ValueError(f"Undefined game: {args.game}")
+    game = ExtensiveGameBuilder.build(spec=args.game_specifier)
 
-    exp_name = f'{args.game}/{args.cfr_algorithm}/{args.exp_name}'
+    experiment = Experiment(args.exp_name)
+    experiment_writer = WANDBExperimentWriter(experiment)
 
     if args.cfr_algorithm == 'vanilla':
         strategy, exploitabilities, strategies = cfr.cfr(
-            exp_name,
+            experiment,
             game,
             num_iters=args.num_iters,
-            use_chance_sampling=args.use_chance_sampling
+            use_chance_sampling=args.use_chance_sampling,
+            experiment_writer=experiment_writer,
         )
     elif args.cfr_algorithm == 'external':
         strategy, exploitabilities, strategies = external_cfr.external_sampling_cfr(
-            exp_name,
+            experiment,
             game,
-            num_iters=args.num_iters
+            num_iters=args.num_iters,
+            experiment_writer=experiment_writer,
         )
     else:
         raise ValueError("args.cfr_algorithm was not in {}".format(cfr_algorithms))

@@ -1,6 +1,9 @@
+from typing import Any, Dict
+
 import numpy as np
 
 from rlpoker import extensive_game
+from rlpoker.games.util import parse_params, ExtensiveGameBuilder
 
 
 class OneCardPoker(extensive_game.ExtensiveGame):
@@ -115,3 +118,11 @@ class OneCardPoker(extensive_game.ExtensiveGame):
         """
         game_tree = OneCardPoker.create_one_card_tree([], range(1, n_cards+1))
         return game_tree
+
+
+class OneCardPokerBuilder(ExtensiveGameBuilder):
+
+    @staticmethod
+    def build(spec: str) -> extensive_game.ExtensiveGame:
+        params = parse_params(spec)
+        return OneCardPoker.create_game(int(params['values']))

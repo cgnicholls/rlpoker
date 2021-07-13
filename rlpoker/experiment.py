@@ -1,7 +1,10 @@
+import abc
 import os
 import time
+from typing import Dict, Any
 
 import numpy as np
+import wandb
 from tensorboardX import SummaryWriter
 
 
@@ -20,8 +23,31 @@ class Experiment:
     def save_path(self):
         return os.path.join(self._base_save_path, self._exp_name)
 
+    @property
+    def exp_name(self):
+        return self._exp_name
 
-class ExperimentSummaryWriter(SummaryWriter):
+
+class ExperimentWriter(abc.ABC):
+
+    @abc.abstractmethod
+    def log(self, data: Dict[str, Any], global_step: int = None):
+        pass
+
+
+class WANDBExperimentWriter(ExperimentWriter):
+
+    def __init__(self, experiment: Experiment, project: str = "rlpoker", entity: str = "cgnicholls",
+                 tags: Dict[str, Any] = None):
+        self._tags = tags if tags is not None else dict()
+        self._tags['exp_name'] = experiment.exp_name
+        wandb.init(project=project, entity=entity, tags=self._tags)
+
+    def log(self, data: Dict[str, Any], global_step: int = None):
+        wandb.log(data, step=global_step)
+
+
+class ExperimentSummaryWriter(ExperimentWriter, SummaryWriter):
     def __init__(self, experiment: Experiment, flush_secs: int = 120):
         self._save_path = experiment.save_path
 
@@ -32,6 +58,10 @@ class ExperimentSummaryWriter(SummaryWriter):
             raise ValueError(f"Experiment already exists at: {logdir}.")
 
         super().__init__(logdir=logdir, flush_secs=flush_secs)
+
+    def log(self, data: Dict[str, Any], global_step: int = None):
+        for tag, val in data.items():
+            self.add_scalar(tag, val, global_step=global_step)
 
 
 class StrategySaver:

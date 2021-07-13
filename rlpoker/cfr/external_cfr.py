@@ -8,10 +8,11 @@ from typing import Dict
 from rlpoker import extensive_game
 from rlpoker.cfr import cfr, cfr_game, cfr_metrics, cfr_util
 from rlpoker import best_response
-from rlpoker.experiment import ExperimentSummaryWriter, Experiment
+from rlpoker.experiment import ExperimentSummaryWriter, Experiment, ExperimentWriter
 
 
-def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num_iters: int = 1000):
+def external_sampling_cfr(experiment: Experiment, game: extensive_game.ExtensiveGame, num_iters: int = 1000,
+                          experiment_writer: ExperimentWriter = None):
     """
 
     Args:
@@ -41,8 +42,6 @@ def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num
     strategies = []
     exploitabilities = []
 
-    experiment = Experiment(exp_name)
-    writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
     saver = cfr.CFRStrategySaver(experiment=experiment)
 
     for t in range(num_iters):
@@ -68,9 +67,12 @@ def external_sampling_cfr(exp_name: str, game: extensive_game.ExtensiveGame, num
             immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
             print("Immediate regret: {}".format(immediate_regret))
 
-            writer.add_scalar('nodes_touched', cfr_state.nodes_touched, global_step=t)
-            writer.add_scalar('exploitability_mbb_h', exploitability * 1000, global_step=t)
-            writer.add_scalar('immediate_regret', immediate_regret, global_step=t)
+            log_data = {
+                'nodes_touched': cfr_state.nodes_touched,
+                'exploitability_mbbh': exploitability * 1000,
+                'immediate_regret': immediate_regret,
+            }
+            experiment_writer.log(log_data, global_step=t)
 
             saver.save_best_strategy(average_strategy, t, exploitability)
 

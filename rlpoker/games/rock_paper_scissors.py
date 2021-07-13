@@ -3,6 +3,7 @@ import typing
 import numpy as np
 
 from rlpoker import extensive_game, neural_game
+from rlpoker.games.util import ExtensiveGameBuilder
 
 
 def create_neural_rock_paper_scissors() -> typing.Tuple[extensive_game.ExtensiveGame,
@@ -63,3 +64,12 @@ def create_rock_paper_scissors() -> extensive_game.ExtensiveGame:
     }
 
     return extensive_game.ExtensiveGame(root)
+
+
+class RockPaperScissorsBuilder(ExtensiveGameBuilder):
+
+    @staticmethod
+    def build(spec: str) -> extensive_game.ExtensiveGame:
+        game, _, _ = create_neural_rock_paper_scissors()
+
+        return game

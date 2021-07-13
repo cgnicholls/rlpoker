@@ -10,8 +10,8 @@ from rlpoker import best_response
 from rlpoker.cfr import cfr_metrics, cfr_util
 from rlpoker.cfr.cfr_game import get_available_actions, get_information_set, \
     sample_chance_action, is_terminal, payoffs, which_player
+from rlpoker.experiment import Experiment, StrategySaver, ExperimentWriter
 from rlpoker.extensive_game import ActionFloat, Strategy
-from rlpoker.experiment import ExperimentSummaryWriter, Experiment, StrategySaver
 
 
 class CFRStrategySaver(StrategySaver):
@@ -61,14 +61,16 @@ def compare_strategies(s1: Strategy, s2: Strategy):
     return np.mean(distances)
 
 
-def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_weight=False):
+def cfr(experiment: Experiment, game, num_iters=10000, use_chance_sampling=True, linear_weight=False,
+        experiment_writer: ExperimentWriter = False):
     """
 
     Args:
-        exp_name: the experiment name. Used to create a directory for the experiment.
+        experiment: the experiment.
         game:
         num_iters:
         use_chance_sampling:
+        experiment_writer: used to write logs.
 
     Returns:
         average_strategy, exploitabilities
@@ -96,8 +98,6 @@ def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_w
 
     average_strategy2 = cfr_util.AverageStrategy(game)
 
-    experiment = Experiment(exp_name)
-    writer = ExperimentSummaryWriter(experiment=experiment, flush_secs=20)
     saver = CFRStrategySaver(experiment=experiment)
 
     # Each information set is uniquely identified with an action tuple.
@@ -138,9 +138,14 @@ def cfr(exp_name: str, game, num_iters=10000, use_chance_sampling=True, linear_w
             immediate_regret, _, _ = cfr_metrics.compute_immediate_regret(game, strategies)
             print("Immediate regret: {}".format(immediate_regret))
 
-            writer.add_scalar('nodes_touched', cfr_state.nodes_touched, global_step=t)
-            writer.add_scalar('exploitability_mbb_h', exploitability * 1000, global_step=t)
-            writer.add_scalar('immediate_regret', immediate_regret, global_step=t)
+            log_data = {
+                "nodes_touched": cfr_state.nodes_touched,
+                "exploitability_mbbh": exploitability * 1000,
+                "immediate_regret": immediate_regret,
+            }
+
+            if experiment_writer:
+                experiment_writer.log(data=log_data, global_step=t)
 
             saver.save_best_strategy(average_strategy, t, exploitability)
 

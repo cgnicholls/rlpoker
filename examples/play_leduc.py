@@ -32,8 +32,7 @@ if __name__ == "__main__":
 
         action = None
         while action not in node.children:
-            action = int(input("Choose move: (0 = fold, 1 = call, "
-                                         "2 = bet) "))
+            action = int(input("Choose move: (0 = fold, 1 = call, 2 = bet) "))
 
         node = node.children[action]
 

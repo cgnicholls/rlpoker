@@ -1,12 +1,14 @@
 # coding: utf-8
 # This implements Leduc Hold'em.
+from typing import Any, Dict
 
 import numpy as np
 
 from collections import deque, Counter
 
 from rlpoker.extensive_game import ExtensiveGame, ExtensiveGameNode
-from rlpoker.games.card import Card
+from rlpoker.games.card import Card, get_deck
+from rlpoker.games.util import parse_params, ExtensiveGameBuilder
 from rlpoker.nfsp_game import NFSPGame
 from rlpoker import neural_game
 
@@ -23,6 +25,7 @@ class Leduc(ExtensiveGame):
     - or raise, betting the raise amount.
     On the first move in a round, the player can check or bet.
     """
+
     def __init__(self, cards, max_raises=4, raise_amount=2):
         root = Leduc.create_tree(cards, max_raises=max_raises,
                                  raise_amount=raise_amount)
@@ -70,7 +73,7 @@ class Leduc(ExtensiveGame):
                     index = remaining_cards.index(c)
                     to_explore.append(
                         (child_node, "deal_card_2",
-                         remaining_cards[:index] + remaining_cards[index+1:],
+                         remaining_cards[:index] + remaining_cards[index + 1:],
                          pot))
             elif state == "deal_card_2":
                 for c, n in Counter(remaining_cards).items():
@@ -81,7 +84,7 @@ class Leduc(ExtensiveGame):
                     index = remaining_cards.index(c)
                     to_explore.append(
                         (child_node, "round_1",
-                         remaining_cards[:index] + remaining_cards[index+1:],
+                         remaining_cards[:index] + remaining_cards[index + 1:],
                          pot))
             elif state == "deal_board":
                 # We deal a board card from the remaining cards.
@@ -94,14 +97,14 @@ class Leduc(ExtensiveGame):
                     index = remaining_cards.index(c)
                     to_explore.append((child_node, "round_2",
                                        remaining_cards[:index] +
-                                       remaining_cards[index+1:],
+                                       remaining_cards[index + 1:],
                                        pot.copy()))
             elif state == "round_1" or state == "round_2":
                 # The betting actions are all the actions since the last
                 # card was dealt on the board.
                 last_card_index = max([i for i, a in enumerate(
                     action_list) if type(a) is Card])
-                betting_actions = action_list[last_card_index+1:]
+                betting_actions = action_list[last_card_index + 1:]
                 # First determine the available actions. If we are still in
                 # the betting round then the previous player didn't fold.
                 # There are three options:
@@ -113,14 +116,14 @@ class Leduc(ExtensiveGame):
                     next_player = other_player[current_player]
                     # Call
                     child_node = ExtensiveGameNode(next_player,
-                        action_list + (1,))
+                                                   action_list + (1,))
                     current_node.children[1] = child_node
                     to_explore.append((child_node, state, remaining_cards,
                                        pot.copy()))
 
                     # Bet
                     child_node = ExtensiveGameNode(next_player,
-                        action_list + (2,))
+                                                   action_list + (2,))
                     current_node.children[2] = child_node
                     next_pot = pot.copy()
                     next_pot[current_player] += raise_amount[state]
@@ -289,7 +292,7 @@ class LeducNFSP(NFSPGame):
 
     def __init__(self, cards, max_raises=4, raise_amount=2):
         self._game = Leduc(cards, max_raises=max_raises,
-                          raise_amount=raise_amount)
+                           raise_amount=raise_amount)
 
         self._current_node = None
 
@@ -496,3 +499,13 @@ def create_neural_leduc(cards, max_raises=4, raise_amount=2):
     info_set_vectoriser = neural_game.InfoSetVectoriser(state_vectors)
 
     return neural_game.NeuralGame(game, action_indexer, info_set_vectoriser)
+
+
+class LeducBuilder(ExtensiveGameBuilder):
+
+    @staticmethod
+    def build(spec: str) -> ExtensiveGame:
+        params = parse_params(spec)
+        cards = get_deck(num_values=int(params['values']), num_suits=int(params['suits']))
+        return Leduc(cards)
+
