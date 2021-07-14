@@ -32,12 +32,14 @@ class State:
     The game tree deals with the challenges and counteractions.
     """
     
-    def __init__(self, player, coins, cards, lost_cards, deck):
+    def __init__(self, player, coins, cards, lost_cards, deck, active_action: Action = None):
         self.player = player
         self.coins = coins
         self.cards = cards
         self.lost_cards = lost_cards
         self.deck = deck
+
+        self.active_action = None
 
     def next_player(self):
         return 1 if self.player == 2 else 2
@@ -185,3 +187,6 @@ class Coup(ExtensiveGame):
         cards[2].append(stack3.pop())
         deck = stack3
         return cards, deck
+
+    def get_available_actions(self, state: State):
+        """Returns the available actions for the player in the given state."""

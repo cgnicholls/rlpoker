@@ -1,9 +1,7 @@
 # coding: utf-8
 
-import typing
-
-from rlpoker.util import sample_action
 from rlpoker import extensive_game
+from rlpoker.util import sample_action
 
 
 def payoffs(node: extensive_game.ExtensiveGameNode):

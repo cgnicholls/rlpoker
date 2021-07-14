@@ -1,16 +1,11 @@
 import argparse
 
-# import bokeh.plotting as plt
-
+from rlpoker.best_response import compute_exploitability
 from rlpoker.cfr import cfr, external_cfr, cfr_metrics
 from rlpoker.experiment import Experiment, WANDBExperimentWriter
 from rlpoker.games.game_builder import buildExtensiveGame
-from rlpoker.games.util import ExtensiveGameBuilder
-from rlpoker.games.leduc import Leduc
-from rlpoker.games.rock_paper_scissors import create_neural_rock_paper_scissors
-from rlpoker.games.card import get_deck
-from rlpoker.games.one_card_poker import OneCardPoker
-from rlpoker.best_response import compute_exploitability
+
+# import bokeh.plotting as plt
 
 if __name__ == "__main__":
     games = ['Leduc', 'OneCardPoker', 'RockPaperScissors']
@@ -20,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument('--exp_name', required=True, type=str, help='The name of the experiment.')
     parser.add_argument('--num_iters', default=10000, type=int,
                         help='The number of iterations to run CFR for.')
-    parser.add_argument('--game_specifier', default='leduc:values_3:suits_2')
+    parser.add_argument('--game_specifier', default='Leduc:values_3:suits_2')
     parser.add_argument('--use_chance_sampling', action='store_true',
                         help='Pass this option to use chance sampling. By '
                              'default, we don\'t use chance sampling.')

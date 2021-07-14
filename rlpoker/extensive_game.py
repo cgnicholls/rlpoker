@@ -264,6 +264,20 @@ class ExtensiveGame:
         self.info_set_ids = self.build_info_set_ids()
 
     @staticmethod
+    def count_nodes_recursive(node):
+        if len(node.children) == 0:
+            return 1
+
+        nodes_below = 0
+        for action, child in node.children.items():
+            nodes_below += ExtensiveGame.count_nodes_recursive(child)
+
+        return 1 + nodes_below
+
+    def count_nodes(self):
+        return ExtensiveGame.count_nodes_recursive(self.root)
+
+    @staticmethod
     def print_tree_recursive(node, action_list, only_leaves):
         """ Prints out a list of all nodes in the tree rooted at 'node'.
         """
